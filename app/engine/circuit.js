@@ -217,6 +217,7 @@ export const MODELS = {
   rtc: { pins: ['GND', '5V', 'SDA', 'SCL', 'SQW'], elements: () => [R('5V', 'GND', 10000, 'iq')] },
 
   // ---------- instruments & prototyping ----------
+  scope: { pins: ['CH1', 'CH2', 'GND'], ground: null, elements: () => [R('CH1', 'GND', 1e6, 'ch1'), R('CH2', 'GND', 1e6, 'ch2')] },
   meter: { pins: ['COM', 'V'], elements: p => p.props.mode === 'A' ? [R('V', 'COM', 0.1, 'shunt')] : [R('V', 'COM', 10e6, 'input')] },
   breadboard: { pins: [], ties: [], elements: () => [] },
 };

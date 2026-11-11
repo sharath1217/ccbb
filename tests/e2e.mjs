@@ -30,8 +30,8 @@ async function page(project) {
   return p;
 }
 async function test(name, fn) {
-  try { await fn(); pass++; results.push('ok   ' + name); }
-  catch (e) { fail++; results.push('FAIL ' + name + '\n     ' + e.message.split('\n')[0]); }
+  const t0 = Date.now(); try { await fn(); pass++; results.push('ok   ' + name); console.log('ok   ' + name + ' (' + ((Date.now() - t0) / 1000).toFixed(1) + 's)'); }
+  catch (e) { fail++; const m = 'FAIL ' + name + '\n     ' + e.message.split('\n')[0]; results.push(m); console.log(m); }
 }
 const assert = (c, m) => { if (!c) throw new Error(m); };
 const shot = (p, n) => SHOTS ? p.screenshot({ path: path.join(root, 'screenshots', 'app-' + n + '.png') }) : null;
@@ -306,6 +306,74 @@ await test('Every microcontroller runs Blink on its built-in LED pin', async () 
     await p.click('#btnStop');
   }
   assert(p.errors.length === 0, p.errors.join(' | ')); await p.close();
+});
+
+await test('Rotate: R key turns a part 90° and its pins move with it', async () => {
+  const p = await page('blink'); await p.evaluate(() => window.ccbb.setZoom(1));
+  await p.click('.pal[data-type="pushbutton"]'); const id = await p.evaluate(() => window.ccbb.S.parts.at(-1).id);
+  const before = await p.evaluate(id => [window.ccbb.pinPos(id + ':1.l'), window.ccbb.pinPos(id + ':1.r')], id);
+  await p.keyboard.press('r'); await p.waitForTimeout(150);
+  const after = await p.evaluate(id => [window.ccbb.pinPos(id + ':1.l'), window.ccbb.pinPos(id + ':1.r')], id);
+  assert(Math.abs(before[0][1] - before[1][1]) < 1 && Math.abs(after[0][0] - after[1][0]) < 1, 'pins did not rotate: ' + JSON.stringify([before, after]));
+  assert(await p.evaluate(id => window.ccbb.S.parts.find(x => x.id === id).rot, id) === 90);
+  await p.close();
+});
+
+await test('Oscilloscope shows Blink as a 0.5 Hz square wave and PWM duty cycle', async () => {
+  const p = await page('blink');
+  await p.evaluate(() => { const S = window.ccbb.S; S.parts.push({ id: 'sc1', type: 'scope', x: 760, y: 360, props: { tdiv: 0.5, vdiv: 2 } }); window.ccbb.load({ parts: S.parts, wires: [...S.wires, { from: 'sc1:CH1', to: 'uno1:13' }, { from: 'sc1:GND', to: 'uno1:GND.2' }], code: document.getElementById('src').value }); });
+  await p.waitForFunction(() => window.ccbb.S.ready); await p.click('#btnRun'); await p.waitForTimeout(4600);
+  const txt = await p.evaluate(() => document.querySelector('[data-id="sc1"] cb-scope').textContent);
+  const f = parseFloat((txt.match(/f ([\d.]+) Hz/) || [])[1]);
+  assert(Math.abs(f - 0.5) < 0.08 && /max 5\.00V/.test(txt), 'scope readout: ' + txt);
+  await shot(p, '14-oscilloscope'); await p.click('#btnStop');
+  await p.evaluate(() => document.getElementById('src').value = 'void setup(){ pinMode(13, OUTPUT); analogWrite(13, 64); }\nvoid loop(){}');
+  await p.evaluate(() => { window.ccbb.S.parts.find(x => x.id === 'sc1').props.tdiv = 0.002; });
+  await p.click('#btnRun'); await p.waitForTimeout(400);
+  const t2 = await p.evaluate(() => document.querySelector('[data-id="sc1"] cb-scope').textContent);
+  assert(/duty 25%/.test(t2) && /490 Hz/.test(t2), 'PWM readout: ' + t2);
+  await p.click('#btnStop'); await p.close();
+});
+
+await test('Info window opens for every part with all 7 tabs', async () => {
+  const p = await page('blink');
+  const types = await p.evaluate(() => [...document.querySelectorAll('.pal')].map(b => b.dataset.type));
+  for (const t of types) { await p.evaluate(t => window.ccbb.showInfo(t), t);
+    const n = await p.locator('#modal .mtab').count(); assert(n === 7, t + ' tabs ' + n);
+    await p.click('#modal .mtab[data-tab="pins"]'); assert(await p.locator('#mBody td').count() >= 2, t + ' pins'); }
+  await p.evaluate(() => window.ccbb.showInfo('ne555')); await p.click('#modal .mtab[data-tab="how"]');
+  await shot(p, '15-info'); await p.keyboard.press('Escape'); assert(await p.locator('#modal').isHidden());
+  await p.close();
+});
+
+await test('Parts & cost lists the circuit with prices and totals', async () => {
+  const p = await page('timer555'); await p.click('#btnBom');
+  const txt = await p.locator('#modal').innerText();
+  assert(/NE555/.test(txt) && /47\.00 kΩ|47 kΩ/.test(txt) && /Estimated total/.test(txt), txt);
+  const b = await p.evaluate(() => window.ccbb.billOfMaterials());
+  assert(b.parts.find(r => /Resistor/.test(r.name) && r.variant === '470 Ω').qty === 1 && b.min > 100 && b.max > b.min, JSON.stringify(b));
+  await shot(p, '16-parts-cost'); await p.close();
+});
+
+await test('Undo and redo restore deleted parts', async () => {
+  const p = await page('blink'); await p.waitForTimeout(300);
+  await p.locator('[data-id="led1"] .tag').click({ force: true }); await p.keyboard.press('Delete'); await p.waitForTimeout(300);
+  assert(await p.locator('.part').count() === 3, 'delete');
+  await p.keyboard.press('Control+z'); await p.waitForFunction(() => window.ccbb.S.ready); await p.waitForTimeout(500);
+  assert(await p.locator('.part').count() === 4, 'undo'); 
+  await p.keyboard.press('Control+y'); await p.waitForFunction(() => window.ccbb.S.ready); await p.waitForTimeout(500);
+  assert(await p.locator('.part').count() === 3, 'redo'); await p.close();
+});
+
+await test('Home page: every lesson link opens its project without errors', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } }); const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+  await p.goto(base.replace('app/index.html', 'index.html')); if (SHOTS) await p.screenshot({ path: path.join(root, 'screenshots', 'home.png'), fullPage: true });
+  const links = await p.locator('a.lesson').evaluateAll(as => as.map(a => a.href));
+  assert(links.length === 13, 'lessons ' + links.length);
+  for (const l of links) { await p.goto(l); await p.waitForFunction(() => window.ccbb && window.ccbb.S.ready, null, { timeout: 15000 });
+    assert(await p.locator('.part').count() > 1, 'empty project ' + l); }
+  const man = JSON.parse(fs.readFileSync(path.join(root, 'app/manifest.webmanifest'), 'utf8')); assert(man.name && man.icons.length && man.start_url, 'manifest');
+  assert(errs.length === 0, errs.join(' | ')); await ctx.close();
 });
 
 await test('Code panel minimizes and restores', async () => {

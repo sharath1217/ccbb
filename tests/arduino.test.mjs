@@ -70,3 +70,9 @@ test('syntax errors are reported, not swallowed', () => {
   const b = fakeBoard();
   assert.throws(() => b.runner.compile('void setup( { }'));
 });
+
+test('float variables print with 2 decimals like a real Arduino, ints without', async () => {
+  const b = fakeBoard();
+  await b.runner.run(`void setup(){ float t = 27; int n = 27; double x = 1.5; Serial.println(t); Serial.println(n); Serial.println(x, 3); Serial.println(t, 1); }`, { maxLoops: 0 });
+  assert.equal(b.serial(), '27.00\n27\n1.500\n27.0\n');
+});

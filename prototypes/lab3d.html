@@ -41,7 +41,7 @@
 .pill{display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px;background:#dcfce7;color:#166534}
 .pill.w{background:#fef3c7;color:#92400e}
 </style>
-<script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js"}}</script>
+<script type="importmap">{"imports":{"three":"../vendor/three/three.module.min.js"}}</script>
 </head><body>
 <canvas id="c"></canvas><div id="labels"></div>
 
@@ -70,8 +70,8 @@
 
 <script type="module">
 import * as THREE from 'three';
-import {OrbitControls} from './vendor/three/OrbitControls.js';
-import {RoomEnvironment} from './vendor/three/RoomEnvironment.js';
+import {OrbitControls} from '../vendor/three/OrbitControls.js';
+import {RoomEnvironment} from '../vendor/three/RoomEnvironment.js';
 const view=new URLSearchParams(location.search).get('view')||'mcu';
 document.querySelectorAll('#mode span').forEach(s=>s.classList.toggle('on',s.dataset.m===view));
 

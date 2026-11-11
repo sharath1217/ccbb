@@ -13,6 +13,8 @@ export function transpile(src) {
   s = s.replace(/^\s*#define\s+(\w+)\s+(.+)$/gm, 'const $1 = $2;');
   s = s.replace(/&\s*Wire\b/g, 'Wire');
   s = s.replace(new RegExp('\\b(' + LIBS.join('|') + ')\\s+(\\w+)\\s*(?:\\(([^;]*)\\))?\\s*;', 'g'), (m, cls, name, args) => `let ${name} = new ${cls}(${args || ''});`);
+  const floats = [...s.matchAll(/\b(?:float|double)\s+([A-Za-z_]\w*)/g)].map(m => m[1]);
+  if (floats.length) s = s.replace(new RegExp('\\.(print|println)\\(\\s*(' + floats.join('|') + ')\\s*([,)])', 'g'), '.$1(__f($2)$3');
   const fnNames = [];
   s = s.replace(new RegExp('\\b' + FN_TYPES + '\\s+([A-Za-z_]\\w*)\\s*\\(([^)]*)\\)\\s*\\{', 'g'), (m, name, params) => {
     fnNames.push(name);
@@ -58,18 +60,18 @@ export function createRunner(io, { speed = 1, now = () => performance.now(), sle
       init() { this.push(); } begin() { this.push(); } backlight() { this.bl = true; this.push(); } noBacklight() { this.bl = false; this.push(); }
       clear() { this.buf = this.buf.map(() => ' '.repeat(this.cols)); this.x = this.y = 0; this.push(); } home() { this.x = this.y = 0; }
       setCursor(x, y) { this.x = x; this.y = y; }
-      print(v, d) { let t = typeof v !== 'number' ? String(v) : d !== undefined && ![2, 8, 10, 16].includes(d) ? v.toFixed(d) : Number.isInteger(v) ? String(v) : v.toFixed(2);
+      print(v, d) { if (v && v.__float !== undefined) v = v.__float, d = d ?? 2; let t = typeof v !== 'number' ? String(v) : d !== undefined && ![2, 8, 10, 16].includes(d) ? v.toFixed(d) : Number.isInteger(v) ? String(v) : v.toFixed(2);
         const row = this.buf[this.y]; if (row === undefined) return; this.buf[this.y] = (row.slice(0, this.x) + t + row.slice(this.x + t.length)).slice(0, this.cols); this.x += t.length; this.push(); } },
     Adafruit_SSD1306: class { constructor(w = 128, h = 64) { Object.assign(this, { w, h, ops: [], size: 1, x: 0, y: 0, color: 1 }); }
       begin() { return true; } clearDisplay() { this.ops = []; } display() { io.lib?.oled?.(this.ops.slice()); }
       setTextSize(n) { this.size = n; } setTextColor(c) { this.color = c; } setCursor(x, y) { this.x = x; this.y = y; }
-      print(v, d) { const t = typeof v !== 'number' ? String(v) : d !== undefined && ![2, 8, 10, 16].includes(d) ? v.toFixed(d) : Number.isInteger(v) ? String(v) : v.toFixed(2); this.ops.push(['text', this.x, this.y, this.size, t, this.color]); this.x += t.length * 6 * this.size; }
+      print(v, d) { if (v && v.__float !== undefined) { v = v.__float; d = d ?? 2; } const t = typeof v !== 'number' ? String(v) : d !== undefined && ![2, 8, 10, 16].includes(d) ? v.toFixed(d) : Number.isInteger(v) ? String(v) : v.toFixed(2); this.ops.push(['text', this.x, this.y, this.size, t, this.color]); this.x += t.length * 6 * this.size; }
       println(v = '', d) { this.print(v, d); this.x = 0; this.y += 8 * this.size; }
       drawPixel(x, y, c = 1) { this.ops.push(['px', x, y, c]); } drawLine(a, b, c2, d, c = 1) { this.ops.push(['line', a, b, c2, d, c]); }
       drawRect(x, y, w, h, c = 1) { this.ops.push(['rect', x, y, w, h, c, 0]); } fillRect(x, y, w, h, c = 1) { this.ops.push(['rect', x, y, w, h, c, 1]); }
       drawCircle(x, y, r, c = 1) { this.ops.push(['circle', x, y, r, c, 0]); } fillCircle(x, y, r, c = 1) { this.ops.push(['circle', x, y, r, c, 1]); } },
     ...(board?.consts || {}),
-    __int: v => typeof v === 'number' ? Math.trunc(v) : v, isnan: Number.isNaN, isinf: v => !isFinite(v), sq: x => x * x,
+    __f: v => ({ __float: v }), __int: v => typeof v === 'number' ? Math.trunc(v) : v, isnan: Number.isNaN, isinf: v => !isFinite(v), sq: x => x * x,
     pinMode: (p, m) => io.pinMode(pin(p), m),
     digitalWrite: (p, v) => io.digitalWrite(pin(p), v ? 1 : 0),
     analogWrite: (p, v) => io.analogWrite(pin(p), Math.max(0, Math.min(255, Math.round(v)))),
@@ -87,6 +89,7 @@ export function createRunner(io, { speed = 1, now = () => performance.now(), sle
   };
   // Arduino: print(int, base) for base 2/8/16, print(float, digits) otherwise
   function fmtNum(v, base) {
+    if (v && v.__float !== undefined) return isNaN(v.__float) ? 'nan' : v.__float.toFixed(base !== undefined && ![2, 8, 10, 16].includes(base) ? base : 2);
     if (typeof v !== 'number') return String(v);
     if (Number.isInteger(v) && (base === 2 || base === 8 || base === 16)) return Math.trunc(v).toString(base).toUpperCase();
     if (base !== undefined && ![2, 8, 10, 16].includes(base)) return v.toFixed(base);          // print(x, digits)

@@ -1,134 +1,81 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Component Test Lab</title>
+<title>ccbb · Test circuits before you buy</title>
+<link rel="icon" href="app/icon.svg"><meta name="theme-color" content="#0f9d8f">
+<meta name="description" content="A free virtual electronics lab for students: build circuits on a breadboard, run Arduino/ESP32/Pico code, measure with a multimeter and oscilloscope, and get a parts list with prices before buying.">
 <style>
-:root{--bg:#0f1420;--card:#18202f;--line:#263047;--ink:#e6ebf5;--mut:#8a96ab;--acc:#3fb6ff;--ok:#3ddc84;--warn:#ffb020;--bad:#ff5a5a}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,sans-serif}
-header{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
-h1{margin:0;font-size:20px}header small{color:var(--mut)}
-nav button,select{background:#222c40;color:var(--ink);border:0;border-radius:6px;padding:8px 12px;cursor:pointer;font:inherit}
-nav button.on{background:var(--acc);color:#001}
-.wrap{display:grid;grid-template-columns:260px 1fr;gap:16px;padding:16px}@media(max-width:820px){.wrap{grid-template-columns:1fr}}
-.card{background:var(--card);border-radius:10px;padding:14px}
-input[type=search],input[type=number]{width:100%;padding:8px;border-radius:6px;border:1px solid #2c3850;background:#0f1420;color:var(--ink);font:inherit}
-.cat{color:var(--mut);font-size:12px;text-transform:uppercase;margin:12px 0 4px}
-.item{padding:6px 9px;border-radius:6px;cursor:pointer}.item:hover{background:#222c40}.item.on{background:var(--acc);color:#001}
-#list{max-height:75vh;overflow:auto}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:820px){.grid{grid-template-columns:1fr}}
-h2{margin:0 0 4px}.mut{color:var(--mut);font-size:13px}
-.big{font-size:34px;font-weight:700;margin:8px 0;word-break:break-word}.ctl{margin:12px 0}.ctl label{display:flex;justify-content:space-between;gap:8px;font-size:13px}
-input[type=range]{width:100%}
-pre{background:#0b0f18;padding:10px;border-radius:6px;overflow:auto;font-size:12px;max-height:230px;margin:6px 0 0}
-#serial{height:170px}.pin{font-family:monospace;font-size:13px}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
-#viz{height:110px;border-radius:8px;background:#0b0f18;display:flex;align-items:center;justify-content:center;font-size:48px;transition:background .25s}
-ul{margin:6px 0 0;padding-left:18px}li{margin:4px 0;font-size:14px}
-table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--mut);font-weight:600}
-.tag{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;background:#222c40;margin:2px}
-.hide{display:none}.tblwrap{overflow-x:auto}
+:root{--paper:#fbf8f1;--ink:#1c2230;--mut:#6b7385;--line:#e6e0d3;--acc:#0f9d8f;--acc2:#2f5bea;--card:#fff}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 "Inter",system-ui,-apple-system,sans-serif}
+a{color:var(--acc2)}.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+header{display:flex;align-items:center;gap:10px;padding:18px 0}.logo{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--acc),var(--acc2))}header b{font-size:20px}
+.hero{display:grid;grid-template-columns:1.1fr 1fr;gap:34px;align-items:center;padding:30px 0 40px}@media(max-width:820px){.hero{grid-template-columns:1fr}}
+h1{font-size:clamp(30px,4.6vw,48px);line-height:1.1;margin:0 0 14px;letter-spacing:-.02em}h1 em{font-style:normal;color:var(--acc)}
+.lead{font-size:18px;color:#3a4152;margin:0 0 22px}
+.cta{display:inline-flex;align-items:center;gap:8px;background:var(--acc);color:#fff;text-decoration:none;font-weight:700;padding:13px 22px;border-radius:12px;box-shadow:0 6px 18px #0f9d8f44}
+.cta2{display:inline-flex;margin-left:10px;padding:13px 18px;border-radius:12px;border:1px solid var(--line);background:#fff;color:var(--ink);text-decoration:none;font-weight:600}
+.shot{border-radius:14px;border:1px solid var(--line);box-shadow:0 18px 50px #3a2f1a22;width:100%;height:auto;background:#fff}
+.stats{display:flex;gap:26px;flex-wrap:wrap;margin-top:24px}.stats div b{display:block;font-size:24px}.stats div{color:var(--mut);font-size:14px}
+section{padding:34px 0;border-top:1px solid var(--line)}h2{font-size:26px;margin:0 0 6px}.sub{color:var(--mut);margin:0 0 20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}.card h3{margin:4px 0 6px;font-size:16px}.card p{margin:0;color:#4b5263;font-size:14.5px}.ic{font-size:24px}
+.lessons{counter-reset:l;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.lesson{display:flex;gap:12px;align-items:flex-start;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;text-decoration:none;color:inherit}
+.lesson:hover{border-color:var(--acc)}.lesson::before{counter-increment:l;content:counter(l);flex:none;width:28px;height:28px;border-radius:50%;background:#e7f6f4;color:var(--acc);font-weight:800;display:flex;align-items:center;justify-content:center}
+.lesson b{display:block}.lesson span{color:var(--mut);font-size:13.5px}.lvl{font-size:11px;font-weight:700;color:var(--acc2);text-transform:uppercase;letter-spacing:.06em}
+ol.steps{padding-left:20px}ol.steps li{margin:6px 0}
+footer{padding:28px 0 40px;color:var(--mut);font-size:14px;border-top:1px solid var(--line)}
 </style></head><body>
-<header>
-  <div><h1>Component Test Lab</h1><small>Test, compare and choose parts before you buy them.</small></div>
-  <nav><button data-tab="test" class="on">Test</button> <button data-tab="compare">Compare</button> <button data-tab="find">Find a part</button></nav>
-  <label class="mut">Board <select id="board"></select></label>
-</header>
-
-<section id="tab-test" class="wrap">
-  <div class="card"><input type="search" id="q" placeholder="Search components…"><div id="list"></div></div>
+<div class="wrap">
+<header><span class="logo"></span><b>ccbb</b><span style="color:var(--mut)">virtual electronics lab</span></header>
+<div class="hero">
   <div>
-    <div class="card" style="margin-bottom:16px"><h2 id="name"></h2><div class="mut" id="spec"></div><div id="compat" style="margin-top:6px;font-size:14px"></div></div>
-    <div class="grid">
-      <div class="card"><b>Real-world conditions</b><div id="ctls"></div><div id="viz"></div></div>
-      <div class="card"><b>Reading</b><div class="big" id="val"></div><div class="pin" id="pins"></div><div id="notes" style="margin-top:8px;font-size:14px"></div></div>
-      <div class="card"><b>Serial Monitor</b> <span class="mut">9600 baud</span><pre id="serial"></pre></div>
-      <div class="card"><b>Common student mistakes</b><ul id="mist"></ul></div>
-      <div class="card" style="grid-column:1/-1"><b>Arduino example code</b><pre id="code"></pre></div>
-    </div>
+    <h1>Test your circuit <em>before</em> you buy the parts.</h1>
+    <p class="lead">Build on a real-looking breadboard, run your Arduino, ESP32 or Pico code, measure with a multimeter and oscilloscope, and see mistakes (like a burnt LED) before they cost you money. Then get the exact shopping list with prices.</p>
+    <a class="cta" href="app/index.html">▶ Open Circuit Studio</a><a class="cta2" href="#lessons">Start the lessons</a>
+    <div class="stats"><div><b>59</b>parts</div><div><b>8</b>microcontrollers</div><div><b>13</b>guided projects</div><div><b>Free</b>works offline</div></div>
+  </div>
+  <img class="shot" src="screenshots/app-5-dimmer.png" alt="Circuit Studio showing an Arduino Uno wired to a breadboard with an LED, resistor and potentiometer, with code and serial monitor on the right">
+</div>
+
+<section>
+  <h2>What you can do</h2><p class="sub">Everything a student needs for an embedded-systems lab, in the browser.</p>
+  <div class="grid">
+    <div class="card"><div class="ic">🧪</div><h3>Real circuit simulation</h3><p>Ohm's law, diodes, transistors, MOSFETs, op-amps, capacitors and 555 timers are calculated like a real circuit simulator.</p></div>
+    <div class="card"><div class="ic">💥</div><h3>Learn from mistakes safely</h3><p>LED without a resistor? Short circuit? 5 V into an ESP32? The circuit check explains what would go wrong and how to fix it.</p></div>
+    <div class="card"><div class="ic">💻</div><h3>Run your code</h3><p>Write Arduino code for Uno, Nano, Mega, ESP32, ESP8266, Pico, RP2040 or STM32. Includes DHT, Servo, LCD and OLED libraries.</p></div>
+    <div class="card"><div class="ic">📈</div><h3>Lab instruments</h3><p>Multimeter (V, A, Ω), 2-channel oscilloscope and a bench power supply with current limit.</p></div>
+    <div class="card"><div class="ic">🔬</div><h3>Know every part</h3><p>Double-click any part to see what it looks like, what is inside, its pins, specs, common mistakes and buying tips.</p></div>
+    <div class="card"><div class="ic">🧾</div><h3>Parts list &amp; cost</h3><p>One click turns your circuit into a shopping list with typical Indian prices, copy or download as CSV.</p></div>
   </div>
 </section>
 
-<section id="tab-compare" class="wrap hide" style="grid-template-columns:1fr">
-  <div class="card"><b>Compare parts in a category</b> <select id="ccat"></select><div class="tblwrap" style="margin-top:12px"><table id="ctable"></table></div></div>
-</section>
-
-<section id="tab-find" class="wrap hide" style="grid-template-columns:1fr">
-  <div class="card">
-    <b>Find the right part for your project</b>
-    <div class="grid" style="margin-top:12px">
-      <label>What do you need?<br><select id="fcat" style="width:100%"></select></label>
-      <label>Max budget (₹)<br><input type="number" id="fbud" value="500" min="0"></label>
-    </div>
-    <p class="mut">Board voltage is taken from the selector at the top.</p>
-    <div id="fres"></div>
+<section id="lessons">
+  <h2>Lessons</h2><p class="sub">Work through them in order. Each opens a ready-made circuit with comments explaining what to try.</p>
+  <div class="lessons">
+    <a class="lesson" href="app/index.html?project=blink"><div><span class="lvl">Start here</span><b>Blink an LED</b><span>Your first program, pins and resistors.</span></div></a>
+    <a class="lesson" href="app/index.html?project=burn"><div><span class="lvl">Mistake lab</span><b>LED without a resistor</b><span>See why the resistor matters.</span></div></a>
+    <a class="lesson" href="app/index.html?project=battery"><div><span class="lvl">Basics</span><b>Battery, switch &amp; LED</b><span>A circuit with no code; use the multimeter.</span></div></a>
+    <a class="lesson" href="app/index.html?project=divider"><div><span class="lvl">Basics</span><b>Voltage divider</b><span>Vout = Vin × R2 / (R1 + R2).</span></div></a>
+    <a class="lesson" href="app/index.html?project=button"><div><span class="lvl">Input</span><b>Button controls LED</b><span>digitalRead and INPUT_PULLUP.</span></div></a>
+    <a class="lesson" href="app/index.html?project=dimmer"><div><span class="lvl">Analog</span><b>Knob dims an LED</b><span>analogRead, map and PWM.</span></div></a>
+    <a class="lesson" href="app/index.html?project=gate"><div><span class="lvl">Digital logic</span><b>AND gate 74HC08</b><span>Truth tables with real chips.</span></div></a>
+    <a class="lesson" href="app/index.html?project=timer555"><div><span class="lvl">Analog</span><b>555 timer blinker</b><span>Capacitors charging over time; add the oscilloscope.</span></div></a>
+    <a class="lesson" href="app/index.html?project=opamp"><div><span class="lvl">Analog</span><b>Op-amp amplifier</b><span>Gain = 1 + Rf/Rg, and clipping.</span></div></a>
+    <a class="lesson" href="app/index.html?project=mosfet"><div><span class="lvl">Power</span><b>MOSFET motor speed</b><span>Switch big currents safely.</span></div></a>
+    <a class="lesson" href="app/index.html?project=weather"><div><span class="lvl">Sensors</span><b>DHT22 on an LCD</b><span>Libraries and I2C displays.</span></div></a>
+    <a class="lesson" href="app/index.html?project=radar"><div><span class="lvl">Sensors</span><b>Ultrasonic → servo</b><span>pulseIn and the Servo library.</span></div></a>
+    <a class="lesson" href="app/index.html?project=esp32"><div><span class="lvl">3.3 V boards</span><b>ESP32 blink</b><span>What changes on a 3.3 V board.</span></div></a>
   </div>
 </section>
 
-<script src="components.js"></script>
-<script>
-const $=id=>document.getElementById(id);
-let cur, st={}, board="uno";
-const cats=[...new Set(COMPONENTS.map(c=>c.cat))];
-const price=c=>`₹${c.specs.price[0]}–${c.specs.price[1]}`;
-
-function compat(c){ const v=BOARDS[board].v, s=c.specs;
-  if(s.vMin===0&&s.vMax>=v) return ["ok","Works with this board."];
-  if(v<s.vMin) return ["bad",`Needs ${s.vMin} V+, your board is ${v} V. Use a 5 V supply and level shifter, or pick another part.`];
-  if(v>s.vMax) return ["bad",`Max ${s.vMax} V. Your ${v} V board can damage it. Power from 3.3 V.`];
-  return ["ok",`Works at ${v} V.`]; }
-
-$("board").innerHTML=Object.entries(BOARDS).map(([k,b])=>`<option value=${k}>${b.name}</option>`).join("");
-$("board").onchange=e=>{board=e.target.value; if(cur) showCompat(); renderCompare(); renderFind();};
-
-// ---------- TEST TAB ----------
-function list(f=""){ let h="",last="";
-  COMPONENTS.filter(c=>(c.full+c.cat).toLowerCase().includes(f)).forEach(c=>{
-    if(c.cat!==last){h+=`<div class=cat>${c.cat}</div>`;last=c.cat}
-    h+=`<div class="item${cur&&cur.id===c.id?" on":""}" data-id=${c.id}>${c.name}</div>`});
-  $("list").innerHTML=h||"<p class=mut>No match.</p>";
-  document.querySelectorAll(".item").forEach(e=>e.onclick=()=>pick(e.dataset.id)); }
-function showCompat(){ const [l,t]=compat(cur); $("compat").innerHTML=`<span class=${l}>${l==="ok"?"✔":"✖"} ${t}</span>`; }
-function pick(id){ cur=COMPONENTS.find(c=>c.id===id); st={};
-  const s=cur.specs; $("name").textContent=cur.full;
-  $("spec").innerHTML=[s.measures,s.range,s.accuracy,s.iface,`${s.vMin}–${s.vMax} V`,price(cur)].map(x=>`<span class=tag>${x}</span>`).join("");
-  showCompat(); $("code").textContent=cur.code; $("mist").innerHTML=cur.mistakes.map(m=>`<li>${m}</li>`).join("");
-  $("ctls").innerHTML=cur.ctl.map(([l,k,a,b,d,step])=>{st[k]=d;
-    return `<div class=ctl><label><span>${l}</span><b id=v_${k}>${d}</b></label><input type=range min=${a} max=${b} step=${step||1} value=${d} data-k=${k}></div>`}).join("");
-  document.querySelectorAll("#ctls input").forEach(i=>i.oninput=()=>{st[i.dataset.k]=+i.value;$("v_"+i.dataset.k).textContent=i.value;update()});
-  $("serial").textContent=""; list($("q").value.toLowerCase()); update(); }
-const lim=(v,a,b)=>Math.max(a,Math.min(b,v));
-function update(){ const r=cur.read(st);
-  $("val").textContent=r.v; $("pins").textContent=r.pins; $("viz").textContent=r.emoji;
-  let bg="#0b0f18";
-  if(r.heat!=null) bg=`hsl(${lim(220-r.heat*2,0,220)},60%,${lim(12+r.heat/6,12,40)}%)`;
-  if(r.light!=null) bg=`hsl(50,80%,${lim(5+Math.log10(r.light+1)*12,5,70)}%)`;
-  if(r.color) bg=r.color;
-  $("viz").style.background=bg;
-  $("notes").innerHTML=r.notes?`<span class=${r.notes[0]}>${r.notes[1]}</span>`:""; return r; }
-setInterval(()=>{ if(!cur||$("tab-test").classList.contains("hide")) return;
-  const r=update(), s=$("serial"); s.textContent=(s.textContent+r.v+"\n").split("\n").slice(-40).join("\n"); s.scrollTop=1e9; },700);
-$("q").oninput=e=>list(e.target.value.toLowerCase());
-
-// ---------- COMPARE TAB ----------
-$("ccat").innerHTML=cats.map(c=>`<option>${c}</option>`).join(""); $("ccat").onchange=renderCompare;
-function renderCompare(){ const items=COMPONENTS.filter(c=>c.cat===$("ccat").value);
-  const rows=[["Measures/does",c=>c.specs.measures],["Range",c=>c.specs.range],["Accuracy",c=>c.specs.accuracy],["Interface",c=>c.specs.iface],
-    ["Supply",c=>`${c.specs.vMin}–${c.specs.vMax} V`],["Your board",c=>{const[l]=compat(c);return `<span class=${l}>${l==="ok"?"✔ OK":"✖ No"}</span>`}],["Price",price],["Watch out",c=>c.mistakes[0]]];
-  $("ctable").innerHTML=`<tr><th></th>${items.map(c=>`<th>${c.name}</th>`).join("")}</tr>`+rows.map(([h,f])=>`<tr><th>${h}</th>${items.map(c=>`<td>${f(c)}</td>`).join("")}</tr>`).join(""); }
-
-// ---------- FIND TAB ----------
-$("fcat").innerHTML=cats.map(c=>`<option>${c}</option>`).join("");
-[$("fcat"),$("fbud")].forEach(e=>e.oninput=renderFind);
-function renderFind(){ const bud=+$("fbud").value||0;
-  const items=COMPONENTS.filter(c=>c.cat===$("fcat").value).map(c=>({c,ok:compat(c)[0]==="ok"&&c.specs.price[0]<=bud}))
-    .sort((a,b)=>b.ok-a.ok||a.c.specs.price[0]-b.c.specs.price[0]);
-  $("fres").innerHTML=items.map(({c,ok})=>{const[l,t]=compat(c);const why=l!=="ok"?t:c.specs.price[0]>bud?"Over your budget.":"";
-    return `<div class=card style="background:#111827;margin:8px 0"><b>${ok?"✔":"✖"} ${c.full}</b> <span class=tag>${price(c)}</span><br>
-    <span class=mut>${c.specs.range} · ${c.specs.accuracy} · ${c.specs.iface}</span>${why?`<br><span class=${ok?"ok":"bad"}>${why}</span>`:""}
-    <br><button onclick="go('${c.id}')" style="margin-top:6px">Test it →</button></div>`}).join(""); }
-function go(id){ tab("test"); pick(id); }
-
-function tab(t){ document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.tab===t));
-  ["test","compare","find"].forEach(x=>$("tab-"+x).classList.toggle("hide",x!==t)); }
-document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>tab(b.dataset.tab));
-
-list(); pick("lm35"); renderCompare(); renderFind();
-</script></body></html>
+<section>
+  <h2>Install it on your laptop</h2><p class="sub">ccbb works offline after the first visit.</p>
+  <ol class="steps">
+    <li>Open <a href="app/index.html">Circuit Studio</a> in Chrome or Edge.</li>
+    <li>Click the install icon in the address bar (or menu → <i>Install ccbb</i>).</li>
+    <li>It opens like a normal app, even without internet.</li>
+  </ol>
+  <p class="sub">Running from the source code instead: <code>npm start</code>, then open <code>http://localhost:8000</code>.</p>
+</section>
+<footer>ccbb is a learning tool. Simulation uses typical datasheet values and standard models; always check the datasheet of the exact part you buy. Early prototypes: <a href="prototypes/index.html">component test lab</a>, <a href="prototypes/part3d.html">3D part explorer</a>.</footer>
+</div></body></html>

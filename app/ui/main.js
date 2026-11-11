@@ -2,6 +2,7 @@ import { simulate, fmt, PIN_LIST, isMcu } from '../engine/circuit.js';
 import { BOARDS } from '../engine/boards.js';
 import { createRunner } from '../engine/arduino.js';
 import { CATALOG, BY_TYPE, PROJECTS } from './catalog.js';
+import { INFO } from './info.js';
 
 const $ = id => document.getElementById(id);
 let Z = 1.25;
@@ -49,6 +50,7 @@ function mountPart(p) {
     el.addEventListener('button-press', e => { const d = e.detail || {}; p.props.key = { row: (d.row ?? 0) + 1, col: (d.column ?? 0) + 1, label: d.key }; changed(); });
     el.addEventListener('button-release', () => { p.props.key = null; changed(); });
   }
+  host.addEventListener('dblclick', () => showInfo(p.type));
   host.addEventListener('pointerdown', e => {
     const interactive = ['pushbutton', 'switch', 'pot', 'slidepot', 'keypad', 'joystick'].includes(p.type) && !e.target.classList.contains('tag');
     selectThing({ part: p.id });
@@ -73,6 +75,7 @@ function applyProps(p) {
   if (p.type === 'dipswitch') el.values = p.props.bits;
   if (isMcu(p.type)) el.ledPower = true;
   host.classList.toggle('burnt', !!p.props.burnt);
+  el.style.transform = p.rot ? `rotate(${p.rot}deg)` : '';
 }
 const INSERTABLE = ['resistor', 'led', 'pushbutton', 'pot', 'buzzer', 'switch', 'capacitor', 'ecap', 'diode', 'npn', 'pnp', 'nmos', 'reg7805', 'lm358', 'ne555', 'hc00', 'hc08', 'hc32', 'hc86', 'hc04', 'rgb'];
 function placeHost(p) { const h = els.get(p.id).host; h.style.left = p.x + 'px'; h.style.top = p.y + 'px'; }
@@ -110,6 +113,10 @@ function startDrag(e, p) {
     changed(); };
   addEventListener('pointermove', mv); addEventListener('pointerup', up);
 }
+function rotatePart(p) {
+  p.rot = ((p.rot || 0) + 90) % 360; applyProps(p);
+  requestAnimationFrame(() => { if (S.wires.some(w => w.hidden && w.from.startsWith(p.id + ':'))) tryInsert(p); changed(); });
+}
 function removePart(id) {
   S.parts = S.parts.filter(p => p.id !== id); S.wires = S.wires.filter(w => !w.from.startsWith(id + ':') && !w.to.startsWith(id + ':'));
   els.get(id)?.host.remove(); els.delete(id); selectThing(null); changed();
@@ -120,8 +127,12 @@ function pinPos(key) {
   const [id, pin] = key.split(/:(.+)/); const r = els.get(id); if (!r) return null;
   const info = (r.el.pinInfo || []).find(q => q.name === pin); if (!info) return null;
   const w = $('world').getBoundingClientRect(), b = r.el.getBoundingClientRect();
-  const sc = r.el.offsetWidth ? b.width / Z / r.el.offsetWidth : 1;
-  return [(b.left - w.left) / Z + info.x * sc, (b.top - w.top) / Z + info.y * sc];
+  const rot = (S.parts.find(q => q.id === id)?.rot || 0), W0 = r.el.offsetWidth, H0 = r.el.offsetHeight;
+  const sc = W0 ? (rot % 180 ? b.height : b.width) / Z / W0 : 1;
+  if (!rot || !W0) return [(b.left - w.left) / Z + info.x * sc, (b.top - w.top) / Z + info.y * sc];
+  const cx = ((b.left + b.right) / 2 - w.left) / Z, cy = ((b.top + b.bottom) / 2 - w.top) / Z, a = rot * Math.PI / 180;
+  const lx = (info.x - W0 / 2) * sc, ly = (info.y - H0 / 2) * sc;
+  return [cx + lx * Math.cos(a) - ly * Math.sin(a), cy + lx * Math.sin(a) + ly * Math.cos(a)];
 }
 const isGnd = k => /:(GND[.\d]*|AGND|-|COM|VSS|COM\.\d)$/.test(k), isPwr = k => /:(5V[.\d]*|3\.3V|3V3[.\d]*|\+|VCC|VIN|VBUS|V\+|12V|VDD)$/.test(k);
 const PALETTE = ['#2f5bea', '#16a34a', '#f59e0b', '#9333ea', '#0891b2', '#db2777'];
@@ -204,7 +215,10 @@ $('world').addEventListener('pointermove', e => {
 $('scroll').addEventListener('click', e => { if (e.target.id === 'scroll' || e.target.id === 'world' || e.target.id === 'wires') { if (!e.target.dataset?.i) selectThing(null); } });
 addEventListener('keydown', e => {
   if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
-  if (e.key === 'Escape') { S.pending = null; drawWires(); drawPins(); }
+  if (e.key === 'Escape') { S.pending = null; drawWires(); drawPins(); closeModal(); }
+  if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && S.selected?.part) rotatePart(S.parts.find(q => q.id === S.selected.part));
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
   if (e.key === 'Delete' || e.key === 'Backspace') {
     if (S.selected?.part) removePart(S.selected.part);
     else if (S.selected?.wire !== undefined) { S.wires.splice(S.selected.wire, 1); selectThing(null); changed(); }
@@ -238,7 +252,8 @@ function refreshProps() {
     ['voltage', 'Voltage', x => x.toFixed(2) + ' V'], ['vbe', 'V(BE)', x => x.toFixed(2) + ' V'], ['vce', 'V(CE)', x => x.toFixed(2) + ' V'], ['vgs', 'V(GS)', x => x.toFixed(2) + ' V'], ['vds', 'V(DS)', x => x.toFixed(2) + ' V'],
     ['rpm', 'Speed', x => x + ' rpm'], ['angle', 'Angle', x => x + '°'], ['output', 'Output', x => x], ['outputs', 'Outputs', x => x], ['mode', 'Mode', x => x], ['supply', 'Supply', x => x.toFixed(2) + ' V'], ['on', 'State', x => x ? 'ON' : 'off'], ['out1', 'OUT1', x => x.toFixed(2) + ' V'], ['out2', 'OUT2', x => x.toFixed(2) + ' V']];
   const live = LIVE.filter(([k]) => r[k] !== undefined && r[k] !== '').map(([k, l, fn]) => [l, fn(r[k])]);
-  box.innerHTML = `<h4>${c.name}</h4><div class="mut">${c.desc}${c.price ? ` · ₹${c.price[0]}–${c.price[1]}` : ''}</div>${f}<div class="kv">${live.map(([a, b]) => `<span>${a}</span><b>${b}</b>`).join('')}</div><p><button class="btn" id="pDel">Delete part</button></p>`;
+  box.innerHTML = `<h4>${c.name}</h4><div class="mut">${c.desc}${c.price ? ` · ₹${c.price[0]}–${c.price[1]}` : ''}</div>${f}<div class="kv">${live.map(([a, b]) => `<span>${a}</span><b>${b}</b>`).join('')}</div><p class="row"><button class="btn" id="pInfo">ℹ Info</button><button class="btn" id="pRot" title="Rotate (R)">⟳ Rotate</button><button class="btn" id="pDel">Delete</button></p>`;
+  $('pInfo').onclick = () => showInfo(p.type); $('pRot').onclick = () => rotatePart(p);
   for (const x of box.querySelectorAll('[data-k]')) x.oninput = x.onchange = e => { const k = (c.controls || []).find(q => q.key === x.dataset.k);
     p.props[x.dataset.k] = k.kind === 'select' && typeof k.options[0] !== 'number' ? x.value : +x.value; if (x.nextElementSibling) x.nextElementSibling.textContent = x.value + (k.unit ? ' ' + k.unit : ''); applyProps(p); changed(); };
   for (const x of box.querySelectorAll('[data-t]')) x.onclick = () => { p.props[x.dataset.t] = !p.props[x.dataset.t]; applyProps(p); changed(); refreshProps(); };
@@ -249,7 +264,7 @@ function refreshProps() {
 
 // ---------------- simulation ----------------
 let queued = false;
-function changed() { updateBoardLabel(); save(); if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; runSim(); drawWires(); drawPins(); }); } }
+function changed() { updateBoardLabel(); save(); setTimeout(pushHistory, 0); if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; runSim(); drawWires(); drawPins(); }); } }
 function markSeated() { for (const p of S.parts) els.get(p.id)?.host.classList.toggle('seated', S.wires.some(w => w.hidden && w.from.startsWith(p.id + ':'))); }
 const DYN = ['capacitor', 'ecap', 'ne555', 'heartbeat'];
 let simT = 0;
@@ -285,9 +300,10 @@ let lastFrame = performance.now();
   const now = performance.now(), frame = Math.min(0.05, (now - lastFrame) / 1000); lastFrame = now;
   if (isDynamic() && S.ready) {                     // real-time transient simulation (capacitors, 555, pulse sensor)
     const steps = Math.min(40, Math.max(1, Math.ceil(frame / 0.001))), h = frame / steps;
-    for (let i = 0; i < steps; i++) { simT += h; S.sim = simulate(S.parts, S.wires, S.io, { dt: h, t: simT }); }
+    for (let i = 0; i < steps; i++) { simT += h; S.sim = simulate(S.parts, S.wires, S.io, { dt: h, t: simT }); sampleScopes(); }
     runSim(1e-6);
-  }
+  } else if (S.ready) { simT += frame; sampleScopes(); }
+  drawScopes();
   if (S.sim) for (const path of document.querySelectorAll('.flow')) {
     const w = S.wires[path.dataset.f]; if (!w) continue;
     const I = Math.max(S.sim.pinCurrent[w.from] || 0, S.sim.pinCurrent[w.to] || 0);
@@ -297,6 +313,93 @@ let lastFrame = performance.now();
   }
   requestAnimationFrame(animate);
 })();
+
+// ---------------- oscilloscope ----------------
+function sampleScopes() {
+  if (!S.sim) return;
+  for (const p of S.parts.filter(q => q.type === 'scope')) {
+    const g = S.sim.voltAt(p.id, 'GND'), buf = (p.state.buf ??= { ch1: [], ch2: [] }), keep = (p.props.tdiv || 0.2) * 12;
+    for (const ch of ['ch1', 'ch2']) { const pin = ch.toUpperCase(); buf[ch].push([simT, (pwmOn(p.id + ':' + pin)?.avg ?? S.sim.voltAt(p.id, pin)) - g]);
+      while (buf[ch].length && buf[ch][0][0] < simT - keep) buf[ch].shift(); if (buf[ch].length > 4000) buf[ch].splice(0, buf[ch].length - 4000); }
+  }
+}
+// Is this node driven by a PWM pin? Then the scope can show the real square wave (490 Hz like an Uno).
+function pwmOn(key) { const m = S.parts.find(q => isMcu(q.type)); if (!m || S.io.mcu !== m.id) return null;
+  for (const [pin, st] of Object.entries(S.io.pins)) if (st.duty > 0 && st.duty < 1 && S.sim.sameNode(key, m.id + ':' + pin)) return { duty: st.duty, vhigh: st.vhigh, avg: st.duty * st.vhigh, f: 490 };
+  return null; }
+let scopeFrame = 0;
+function drawScopes() {
+  if (++scopeFrame % 2) return;
+  for (const p of S.parts.filter(q => q.type === 'scope')) {
+    const buf = p.state.buf || { ch1: [], ch2: [] }, tdiv = p.props.tdiv || 0.2, span = tdiv * 10, meas = {}, view = { tdiv, vdiv: p.props.vdiv || 2, now: simT, meas };
+    for (const ch of ['ch1', 'ch2']) {
+      const pw = S.sim && pwmOn(p.id + ':' + ch.toUpperCase());
+      if (pw && span <= 0.05) { const T = 1 / pw.f, pts = []; const t0 = simT - span - T; for (let t = Math.floor(t0 / T) * T; t < simT + T; t += T) pts.push([t, 0], [t, pw.vhigh], [t + T * pw.duty, pw.vhigh], [t + T * pw.duty, 0]);
+        view[ch] = pts; meas[ch] = `max ${pw.vhigh.toFixed(2)}V`; if (ch === 'ch1') { meas.f1 = `f ${pw.f} Hz`; meas.d1 = `duty ${Math.round(pw.duty * 100)}%`; } continue; }
+      const pts = buf[ch].filter(([t]) => t >= simT - span); view[ch] = pts;
+      if (pts.length) { const vs = pts.map(x => x[1]), mx = Math.max(...vs), mn = Math.min(...vs); meas[ch] = `max ${mx.toFixed(2)}V`;
+        if (ch === 'ch1' && mx - mn > 0.5) { const mid = (mx + mn) / 2; let up = [], hi = 0; for (let i = 1; i < pts.length; i++) { if (pts[i - 1][1] < mid && pts[i][1] >= mid) up.push(pts[i][0]); if (pts[i][1] >= mid) hi += pts[i][0] - pts[i - 1][0]; }
+          if (up.length >= 2) meas.f1 = `f ${(1 / ((up.at(-1) - up[0]) / (up.length - 1))).toFixed(2)} Hz`; meas.d1 = `duty ${Math.round(hi / (pts.at(-1)[0] - pts[0][0]) * 100)}%`; } }
+    }
+    els.get(p.id).el.view = view;
+  }
+}
+
+// ---------------- info window ----------------
+function showInfo(type) {
+  const c = BY_TYPE[type], d = INFO[type]; if (!d) return;
+  const tabs = [['outside', '👀 Outside'], ['inside', '🔬 Inside'], ['how', '⚙️ How it works'], ['pins', '📍 Pins'], ['specs', '📋 Specs'], ['mistakes', '⚠️ Mistakes'], ['buy', '🛒 Buying']];
+  const body = k => k === 'pins' || k === 'specs' ? `<table>${d[k].map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>` : k === 'mistakes' ? `<ul>${d.mistakes.filter(Boolean).map(m => `<li>${m}</li>`).join('')}</ul>`
+    : k === 'buy' ? `<p>${c.price ? `<b>Typical price in India: ₹${c.price[0]}–${c.price[1]}</b></p><p>` : ''}${d.buy || 'Widely available from electronics shops and online.'}</p>` : `<p>${d[k]}</p>`;
+  $('modal').innerHTML = `<div class="mbox" role="dialog" aria-label="${c.name} information"><div class="mhd"><div><h3>${c.name}</h3><div class="mut">${c.desc}</div></div><button class="btn" id="mClose">✕</button></div>
+    <div class="mgrid"><div class="mpic"><${c.tag} ${Object.entries(c.attrs || {}).map(([k, v]) => `${k}="${v}"`).join(' ')}></${c.tag}></div>
+    <div><div class="mtabs">${tabs.map(([k, l], i) => `<button class="mtab${i ? '' : ' on'}" data-tab="${k}">${l}</button>`).join('')}</div><div class="mbody" id="mBody">${body('outside')}</div>
+    <p class="mut small">Typical datasheet values. Always check the datasheet of the exact part you buy.</p></div></div></div>`;
+  $('modal').hidden = false; $('mClose').onclick = closeModal;
+  for (const b of $('modal').querySelectorAll('.mtab')) b.onclick = () => { $('modal').querySelectorAll('.mtab').forEach(x => x.classList.toggle('on', x === b)); $('mBody').innerHTML = body(b.dataset.tab); };
+}
+function closeModal() { const m = $('modal'); if (m) { m.hidden = true; m.innerHTML = ''; } }
+
+// ---------------- parts list & cost (the "before you buy" list) ----------------
+function billOfMaterials() {
+  const rows = new Map();
+  for (const p of S.parts) { const c = BY_TYPE[p.type]; if (!c) continue;
+    const variant = p.type === 'resistor' ? fmt(p.props.ohms, 'Ω').replace('.00', '') : p.type === 'led' ? p.props.color : p.type === 'ecap' || p.type === 'capacitor' ? fmt(p.props.farads, 'F').replace('.00', '') : p.type === 'battery' ? p.props.volts + ' V' : '';
+    const key = c.name + '|' + variant, r = rows.get(key) || { name: c.name, variant, qty: 0, price: c.price || [0, 0], lab: c.group === 'Instruments' || p.type === 'psu' };
+    r.qty++; rows.set(key, r); }
+  const list = [...rows.values()].sort((a, b) => a.lab - b.lab || a.name.localeCompare(b.name));
+  const parts = list.filter(r => !r.lab), lab = list.filter(r => r.lab);
+  const sum = (rs, i) => rs.reduce((s, r) => s + r.qty * r.price[i], 0);
+  const wireCount = S.wires.filter(w => !w.hidden).length;
+  return { parts, lab, min: sum(parts, 0), max: sum(parts, 1), wires: wireCount, problems: (S.sim?.warnings || []).filter(w => w.level === 'bad').length };
+}
+function showBom() {
+  const b = billOfMaterials();
+  const tr = r => `<tr><td>${r.name}</td><td>${r.variant}</td><td class="num">${r.qty}</td><td class="num">₹${r.price[0] * r.qty}–${r.price[1] * r.qty}</td></tr>`;
+  const text = ['ccbb parts list', ...b.parts.map(r => `${r.qty} × ${r.name}${r.variant ? ' (' + r.variant + ')' : ''}  ₹${r.price[0] * r.qty}–${r.price[1] * r.qty}`), b.wires ? `${b.wires} × jumper wire (pack of 40 ≈ ₹60–100)` : '', `Total ≈ ₹${b.min}–${b.max}`].filter(Boolean).join('\n');
+  $('modal').innerHTML = `<div class="mbox" role="dialog" aria-label="Parts list"><div class="mhd"><div><h3>🧾 Parts list &amp; cost</h3><div class="mut">Everything you need to buy to build this circuit for real</div></div><button class="btn" id="mClose">✕</button></div>
+    ${b.problems ? `<div class="warn bad">⛔ Fix ${b.problems} problem${b.problems > 1 ? 's' : ''} in the Circuit check before you buy: the circuit would damage parts as built.</div>` : b.parts.length ? '<div class="okmsg">✔ The simulator found no damaging mistakes in this circuit.</div>' : ''}
+    <table class="bom"><tr><th>Part</th><th>Value</th><th class="num">Qty</th><th class="num">Price</th></tr>${b.parts.map(tr).join('') || '<tr><td colspan="4" class="mut">No parts yet.</td></tr>'}
+    ${b.wires ? `<tr><td>Jumper wires</td><td>male–male</td><td class="num">${b.wires}</td><td class="num">pack ₹60–100</td></tr>` : ''}
+    <tr class="tot"><td colspan="3">Estimated total</td><td class="num">₹${b.min}–${b.max}</td></tr></table>
+    ${b.lab.length ? `<p class="mut">Lab equipment (not counted, usually available in your college lab): ${b.lab.map(r => r.name).join(', ')}.</p>` : ''}
+    <p class="mut small">Prices are typical Indian retail ranges and change by shop and season.</p>
+    <p class="row"><button class="btn" id="bomCopy">📋 Copy list</button><button class="btn" id="bomCsv">⬇ Download CSV</button></p></div>`;
+  $('modal').hidden = false; $('mClose').onclick = closeModal;
+  $('bomCopy').onclick = () => { navigator.clipboard?.writeText(text); $('bomCopy').textContent = '✔ Copied'; };
+  $('bomCsv').onclick = () => { const csv = 'Part,Value,Qty,Min price,Max price\n' + b.parts.map(r => `"${r.name}","${r.variant}",${r.qty},${r.price[0] * r.qty},${r.price[1] * r.qty}`).join('\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'parts-list.csv'; a.click(); };
+}
+
+// ---------------- undo / redo ----------------
+const hist = { stack: [], i: -1, restoring: false };
+const histSnap = () => JSON.stringify({ parts: S.parts.map(({ state, ...p }) => p), wires: S.wires });
+function pushHistory() { if (hist.restoring || !S.ready) return; const s = histSnap(); if (hist.stack[hist.i] === s) return;
+  hist.stack = hist.stack.slice(0, hist.i + 1); hist.stack.push(s); if (hist.stack.length > 100) hist.stack.shift(); hist.i = hist.stack.length - 1; updateUndoButtons(); }
+function restore(i) { if (i < 0 || i >= hist.stack.length) return; hist.i = i; hist.restoring = true; const d = JSON.parse(hist.stack[i]);
+  load({ ...d, code: $('src').value }, { keepHistory: true }); setTimeout(() => { hist.restoring = false; updateUndoButtons(); }, 400); }
+const undo = () => restore(hist.i - 1), redo = () => restore(hist.i + 1);
+function updateUndoButtons() { if ($('btnUndo')) { $('btnUndo').disabled = hist.i <= 0; $('btnRedo').disabled = hist.i >= hist.stack.length - 1; } }
 
 // ---------------- microcontroller runner (all boards) ----------------
 const mcuPart = () => S.parts.find(p => isMcu(p.type));
@@ -402,7 +505,8 @@ $('src').addEventListener('keydown', e => { if (e.key === 'Tab') { e.preventDefa
 $('btnMin').onclick = () => { $('code').classList.toggle('min'); setTimeout(() => { drawWires(); drawPins(); }, 200); };
 
 // ---------------- projects, save, load ----------------
-function load(data) {
+function load(data, opts = {}) {
+  if (!opts.keepHistory) { hist.stack = []; hist.i = -1; }
   S.ready = false; stopCode(); for (const r of els.values()) r.host.remove(); els.clear();
   S.parts = structuredClone(data.parts || []); S.wires = structuredClone(data.wires || []);
   S.nextId = 1 + Math.max(0, ...S.parts.map(p => +(p.id.match(/\d+$/)?.[0] || 0)));
@@ -413,7 +517,7 @@ function load(data) {
       if (hole && pin) { p.x += hole[0] - pin[0]; p.y += hole[1] - pin[1]; placeHost(p); tryInsert(p); }
       delete p.at;
     }
-    changed(); setTimeout(() => { drawWires(); drawPins(); requestAnimationFrame(() => { S.ready = true; }); }, 200);
+    changed(); setTimeout(() => { drawWires(); drawPins(); requestAnimationFrame(() => { S.ready = true; pushHistory(); }); }, 200);
   }, 60));
 }
 $('projects').onchange = e => { if (e.target.value) load(PROJECTS[e.target.value]); e.target.value = ''; };
@@ -421,14 +525,17 @@ $('btnNew').onclick = () => { if (confirm('Start a new empty circuit?')) load({ 
 $('btnExport').onclick = () => { const b = new Blob([JSON.stringify(snapshot(), null, 2)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'circuit.json'; a.click(); };
 $('fileIn').onchange = async e => { const f = e.target.files[0]; if (f) { try { load(JSON.parse(await f.text())); } catch { alert('That file is not a valid circuit.'); } } };
-const snapshot = () => ({ version: 1, parts: S.parts, wires: S.wires, code: $('src').value });
+const snapshot = () => ({ version: 1, parts: S.parts.map(({ state, ...p }) => p), wires: S.wires, code: $('src').value });
 function save() { try { localStorage.setItem('ccbb.circuit', JSON.stringify(snapshot())); } catch {} }
 addEventListener('resize', () => { drawWires(); drawPins(); });
 
 function setZoom(z) { Z = Math.max(0.6, Math.min(2.2, Math.round(z * 100) / 100)); $('world').style.transform = `scale(${Z})`; $('zoomLbl').textContent = Math.round(Z * 100) + '%'; drawWires(); drawPins(); }
 $('zIn').onclick = () => setZoom(Z + 0.15); $('zOut').onclick = () => setZoom(Z - 0.15); setZoom(Z);
 // expose for tests / power users
-window.ccbb = { get Z() { return Z; }, setZoom, S, load, addPart, connect: (from, to) => { S.wires.push({ from, to }); changed(); }, simNow: () => (runSim(), S.sim), pinPos, PROJECTS };
+$('btnBom').onclick = showBom; $('btnUndo').onclick = undo; $('btnRedo').onclick = redo;
+$('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !navigator.webdriver) navigator.serviceWorker.register('sw.js').catch(() => {});
+window.ccbb = { billOfMaterials, showInfo, rotatePart, undo, redo, hist, get simT() { return simT; }, get Z() { return Z; }, setZoom, S, load, addPart, connect: (from, to) => { S.wires.push({ from, to }); changed(); }, simNow: () => (runSim(), S.sim), pinPos, PROJECTS };
 
 let initial = null; try { initial = JSON.parse(localStorage.getItem('ccbb.circuit')); } catch {}
 const q = new URLSearchParams(location.search).get('project');

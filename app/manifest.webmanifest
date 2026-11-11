@@ -1,0 +1,11 @@
+{
+  "name": "ccbb Circuit Studio",
+  "short_name": "ccbb",
+  "description": "Build, simulate and test electronics circuits before buying the parts.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fbf8f1",
+  "theme_color": "#0f9d8f",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

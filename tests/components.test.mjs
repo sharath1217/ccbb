@@ -243,3 +243,19 @@ test('PWM: 50 % duty on an LED gives half the average current of full on (real s
   const half = run(parts, w, { mcu: 'u', pins: { 9: { mode: 'OUTPUT', v: 5, vhigh: 5, duty: 0.5 } } }).parts.l.current;
   near(half, full / 2, 1e-4, 'average current');
 });
+
+test('every part in the catalog has a model, complete info and a price', async () => {
+  const { CATALOG } = await import('../app/ui/catalog.js'); const { INFO } = await import('../app/ui/info.js');
+  for (const c of CATALOG) {
+    assert.ok(MODELS[c.type], 'model for ' + c.type);
+    const d = INFO[c.type]; assert.ok(d, 'info for ' + c.type);
+    for (const k of ['outside', 'inside', 'how']) assert.ok(d[k] && d[k].length > 20, `${c.type}.${k}`);
+    assert.ok(d.pins.length && d.specs.length && d.mistakes.filter(Boolean).length, c.type + ' pins/specs/mistakes');
+    assert.ok(Array.isArray(c.price) && c.price[0] > 0 && c.price[1] >= c.price[0], 'price ' + c.type);
+  }
+});
+test('oscilloscope inputs are 1 MΩ and do not load the circuit', () => {
+  const s = run([bat(9), P('r1', 'resistor', { ohms: 10000 }), P('r2', 'resistor', { ohms: 10000 }), P('o', 'scope')],
+    [W('b:+', 'r1:1'), W('r1:2', 'r2:1'), W('r2:2', 'b:-'), W('o:CH1', 'r1:2'), W('o:GND', 'b:-')]);
+  near(s.voltAt('o', 'CH1'), 9 * (10000 / 1e6 + 1) / (2 + 10000 / 1e6) - 0 > 0 ? 4.4776 : 0, 0.002, '1 MΩ loading of a 10k/10k divider');
+});

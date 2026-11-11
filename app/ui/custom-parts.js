@@ -145,3 +145,29 @@ for (const [kind, look] of Object.entries(BOARD_LOOK)) {
       ${pins.map(p => `<circle cx="${p.x}" cy="${p.y}" r="2.6" fill="#d4a843"/><circle cx="${p.x}" cy="${p.y}" r="1.1" fill="#3a2a06"/>`).join('')}
       ${L.map((n, i) => txt(26, 28 + i * PT, n, 4.2, '#fff', 'start', 600)).join('')}${Rt.map((n, i) => txt(14 + look.rowGap * PT, 28 + i * PT, n, 4.2, '#fff', 'end', 600)).join('')}` });
 }
+
+// Oscilloscope: 2 channels, 10 × 8 grid. el.view = { ch1: [[t, v]], ch2: [[t, v]], tdiv, vdiv, now, meas }
+customElements.define('cb-scope', class extends HTMLElement {
+  connectedCallback() { this.render(); }
+  set view(v) { this._v = v; this.render(); }
+  get pinInfo() { return [{ name: 'CH1', x: 60, y: 208 }, { name: 'CH2', x: 120, y: 208 }, { name: 'GND', x: 200, y: 208 }]; }
+  render() {
+    const v = this._v || { ch1: [], ch2: [], tdiv: 0.1, vdiv: 1, now: 0, meas: {} }, X0 = 14, Y0 = 14, W = 220, H = 160;
+    const span = v.tdiv * 10, t0 = v.now - span;
+    const path = (pts, col) => { if (!pts?.length) return '';
+      const d = pts.filter(([t]) => t >= t0 - v.tdiv).map(([t, y], i) => `${i ? 'L' : 'M'}${(X0 + (t - t0) / span * W).toFixed(1)},${(Y0 + H / 2 - y / v.vdiv * (H / 8)).toFixed(1)}`).join(' ');
+      return `<path d="${d}" fill="none" stroke="${col}" stroke-width="1.6" stroke-linejoin="round"/>`; };
+    const grid = Array.from({ length: 11 }, (_, i) => `<line x1="${X0 + i * W / 10}" y1="${Y0}" x2="${X0 + i * W / 10}" y2="${Y0 + H}" stroke="#1f3a2c" stroke-width="${i === 5 ? 1 : .6}"/>`).join('')
+      + Array.from({ length: 9 }, (_, i) => `<line x1="${X0}" y1="${Y0 + i * H / 8}" x2="${X0 + W}" y2="${Y0 + i * H / 8}" stroke="#1f3a2c" stroke-width="${i === 4 ? 1 : .6}"/>`).join('');
+    const m = v.meas || {}, f = x => x === undefined ? '—' : x;
+    this.innerHTML = `<svg width="300" height="214" viewBox="0 0 300 214">
+      <rect x="0" y="0" width="300" height="200" rx="10" fill="#d9d4c7" stroke="#a8a091"/><rect x="${X0 - 4}" y="${Y0 - 4}" width="${W + 8}" height="${H + 8}" rx="4" fill="#07130d"/>${grid}
+      <clipPath id="scr"><rect x="${X0}" y="${Y0}" width="${W}" height="${H}"/></clipPath><g clip-path="url(#scr)">${path(v.ch1, '#facc15')}${path(v.ch2, '#38bdf8')}</g>
+      <g font-family="ui-monospace,monospace" font-size="8.5" fill="#1c2230"><text x="242" y="24">CH1</text><text x="242" y="34" fill="#a16207">${f(m.ch1)}</text>
+      <text x="242" y="54">CH2</text><text x="242" y="64" fill="#0369a1">${f(m.ch2)}</text><text x="242" y="90">${v.vdiv} V/div</text><text x="242" y="102">${v.tdiv >= 1 ? v.tdiv + ' s' : v.tdiv * 1000 + ' ms'}/div</text>
+      <text x="242" y="128">${f(m.f1)}</text><text x="242" y="140">${f(m.d1)}</text></g>
+      <circle cx="60" cy="196" r="6" fill="#facc15" stroke="#7c5e10"/><circle cx="120" cy="196" r="6" fill="#38bdf8" stroke="#0c4a6e"/><circle cx="200" cy="196" r="6" fill="#1f2937"/>
+      <g font-family="Arial" font-size="7" font-weight="700" fill="#3b3a36"><text x="72" y="199">CH1</text><text x="132" y="199">CH2</text><text x="212" y="199">GND</text></g>
+      <line x1="60" y1="202" x2="60" y2="208" stroke="#7c5e10" stroke-width="2"/><line x1="120" y1="202" x2="120" y2="208" stroke="#0c4a6e" stroke-width="2"/><line x1="200" y1="202" x2="200" y2="208" stroke="#111" stroke-width="2"/></svg>`;
+  }
+});

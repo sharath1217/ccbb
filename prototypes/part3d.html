@@ -12,13 +12,13 @@
 .tb{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:3;display:flex;gap:4px;background:#fffdf8;border:1px solid var(--line);border-radius:12px;padding:5px;box-shadow:0 6px 20px #6b5a3a14}
 .tb span{padding:7px 12px;border-radius:8px;font-size:13px;font-weight:600;color:var(--mut)}.tb span.on{background:var(--ink);color:#fff}
 </style>
-<script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js"}}</script></head><body>
+<script type="importmap">{"imports":{"three":"../vendor/three/three.module.min.js"}}</script></head><body>
 <canvas id="c"></canvas><svg id="ov"></svg><div id="cards"></div>
 <div class="hdr"><h1>Arduino Uno R3</h1><p>Explore the board · hover any part for details</p></div>
 <div class="tb"><span class="on">Outside</span><span>Inside</span><span>Pinout</span><span>Schematic</span><span>Specs</span></div>
 <script type="module">
 import * as THREE from 'three';
-import {RoomEnvironment} from './vendor/three/RoomEnvironment.js';
+import {RoomEnvironment} from '../vendor/three/RoomEnvironment.js';
 const R=new THREE.WebGLRenderer({canvas:c,antialias:true,preserveDrawingBuffer:true});R.setPixelRatio(devicePixelRatio);R.setSize(innerWidth,innerHeight);
 R.shadowMap.enabled=true;R.shadowMap.type=THREE.PCFSoftShadowMap;R.toneMapping=THREE.ACESFilmicToneMapping;R.outputColorSpace=THREE.SRGBColorSpace;
 const S=new THREE.Scene();S.background=new THREE.Color('#f7f2e8');S.environment=new THREE.PMREMGenerator(R).fromScene(new RoomEnvironment(),.04).texture;

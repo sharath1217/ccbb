@@ -2,20 +2,25 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ccbb Circuit Studio</title>
 <link rel="stylesheet" href="ui/style.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg">
+<meta name="theme-color" content="#0f9d8f">
 <script src="../vendor/wokwi-elements.bundle.js"></script>
 <script type="module" src="ui/custom-parts.js"></script>
 <script type="module" src="ui/main.js"></script>
 </head><body>
 <header class="top">
-  <div class="brand"><span class="logo"></span>ccbb <small>Circuit Studio</small></div>
+  <a class="brand" href="../index.html" title="Home"><span class="logo"></span>ccbb <small>Circuit Studio</small></a>
   <label class="field">Start from <select id="projects"><option value="">Choose a project…</option></select></label>
   <button id="btnNew" class="btn">New</button>
+  <button id="btnUndo" class="btn icon" title="Undo (Ctrl+Z)" disabled>↶</button><button id="btnRedo" class="btn icon" title="Redo (Ctrl+Y)" disabled>↷</button>
   <button id="btnExport" class="btn">Save file</button>
   <label class="btn">Open file<input id="fileIn" type="file" accept=".json" hidden></label>
   <span class="grow"></span>
+  <button id="btnBom" class="btn">🧾 Parts &amp; cost</button>
   <span id="simState" class="pill">● Live</span>
 </header>
-<div class="steps"><b>①</b> Click a part on the left to add it <b>②</b> Click a pin, then another pin, to connect a wire <b>③</b> Press <b>Run</b> to start your code. <span class="mut">Drag a part by its name tag · Select + Delete to remove · Esc cancels a wire</span></div>
+<div class="steps"><b>①</b> Click a part on the left to add it <b>②</b> Click a pin, then another pin, to connect a wire <b>③</b> Press <b>Run</b> to start your code. <span class="mut">Drag a part by its name tag · R rotates · double-click for info · Delete removes · Ctrl+Z undo</span></div>
 <main>
   <aside class="palette" id="palette"></aside>
   <section class="board" id="board">
@@ -49,4 +54,5 @@
     <div class="serial"><div class="serial-hd">Serial Monitor <button class="link" id="btnClear">clear</button></div><pre id="serial"></pre></div>
   </aside>
 </main>
+<div class="modal" id="modal" hidden></div>
 </body></html>

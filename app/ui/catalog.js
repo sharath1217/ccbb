@@ -69,6 +69,7 @@ export const CATALOG = [
   { type: 'rtc', tag: 'wokwi-ds1307', name: 'RTC DS1307', group: 'Sensors', props: {}, desc: 'Real-time clock · I2C (wiring + power check)', price: [80, 150] },
   { type: 'irrecv', tag: 'wokwi-ir-receiver', name: 'IR receiver', group: 'Sensors', props: {}, desc: '38 kHz · idle HIGH (wiring + power check)', price: [15, 30] },
   // ---- instruments ----
+  { type: 'scope', tag: 'cb-scope', name: 'Oscilloscope', group: 'Instruments', props: { tdiv: 0.2, vdiv: 2 }, desc: '2 channels · see voltage over time', price: [2500, 25000], controls: [M('Time / div (s)', 'tdiv', [0.001, 0.002, 0.005, 0.01, 0.05, 0.1, 0.2, 0.5, 1]), M('Volts / div', 'vdiv', [0.5, 1, 2, 5])] },
   { type: 'meter', tag: 'cb-multimeter', name: 'Multimeter', group: 'Instruments', props: { mode: 'V' }, desc: 'Volts · Amps · Ohms', price: [400, 1500], controls: [M('Mode', 'mode', ['V', 'A', 'Ω'])] },
 ];
 export const BY_TYPE = Object.fromEntries(CATALOG.map(c => [c.type, c]));
