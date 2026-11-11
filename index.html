@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Component Test Lab</title>
+<style>
+:root{--bg:#0f1420;--card:#18202f;--line:#263047;--ink:#e6ebf5;--mut:#8a96ab;--acc:#3fb6ff;--ok:#3ddc84;--warn:#ffb020;--bad:#ff5a5a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,sans-serif}
+header{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+h1{margin:0;font-size:20px}header small{color:var(--mut)}
+nav button,select{background:#222c40;color:var(--ink);border:0;border-radius:6px;padding:8px 12px;cursor:pointer;font:inherit}
+nav button.on{background:var(--acc);color:#001}
+.wrap{display:grid;grid-template-columns:260px 1fr;gap:16px;padding:16px}@media(max-width:820px){.wrap{grid-template-columns:1fr}}
+.card{background:var(--card);border-radius:10px;padding:14px}
+input[type=search],input[type=number]{width:100%;padding:8px;border-radius:6px;border:1px solid #2c3850;background:#0f1420;color:var(--ink);font:inherit}
+.cat{color:var(--mut);font-size:12px;text-transform:uppercase;margin:12px 0 4px}
+.item{padding:6px 9px;border-radius:6px;cursor:pointer}.item:hover{background:#222c40}.item.on{background:var(--acc);color:#001}
+#list{max-height:75vh;overflow:auto}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:820px){.grid{grid-template-columns:1fr}}
+h2{margin:0 0 4px}.mut{color:var(--mut);font-size:13px}
+.big{font-size:34px;font-weight:700;margin:8px 0;word-break:break-word}.ctl{margin:12px 0}.ctl label{display:flex;justify-content:space-between;gap:8px;font-size:13px}
+input[type=range]{width:100%}
+pre{background:#0b0f18;padding:10px;border-radius:6px;overflow:auto;font-size:12px;max-height:230px;margin:6px 0 0}
+#serial{height:170px}.pin{font-family:monospace;font-size:13px}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+#viz{height:110px;border-radius:8px;background:#0b0f18;display:flex;align-items:center;justify-content:center;font-size:48px;transition:background .25s}
+ul{margin:6px 0 0;padding-left:18px}li{margin:4px 0;font-size:14px}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--mut);font-weight:600}
+.tag{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;background:#222c40;margin:2px}
+.hide{display:none}.tblwrap{overflow-x:auto}
+</style></head><body>
+<header>
+  <div><h1>Component Test Lab</h1><small>Test, compare and choose parts before you buy them.</small></div>
+  <nav><button data-tab="test" class="on">Test</button> <button data-tab="compare">Compare</button> <button data-tab="find">Find a part</button></nav>
+  <label class="mut">Board <select id="board"></select></label>
+</header>
+
+<section id="tab-test" class="wrap">
+  <div class="card"><input type="search" id="q" placeholder="Search components…"><div id="list"></div></div>
+  <div>
+    <div class="card" style="margin-bottom:16px"><h2 id="name"></h2><div class="mut" id="spec"></div><div id="compat" style="margin-top:6px;font-size:14px"></div></div>
+    <div class="grid">
+      <div class="card"><b>Real-world conditions</b><div id="ctls"></div><div id="viz"></div></div>
+      <div class="card"><b>Reading</b><div class="big" id="val"></div><div class="pin" id="pins"></div><div id="notes" style="margin-top:8px;font-size:14px"></div></div>
+      <div class="card"><b>Serial Monitor</b> <span class="mut">9600 baud</span><pre id="serial"></pre></div>
+      <div class="card"><b>Common student mistakes</b><ul id="mist"></ul></div>
+      <div class="card" style="grid-column:1/-1"><b>Arduino example code</b><pre id="code"></pre></div>
+    </div>
+  </div>
+</section>
+
+<section id="tab-compare" class="wrap hide" style="grid-template-columns:1fr">
+  <div class="card"><b>Compare parts in a category</b> <select id="ccat"></select><div class="tblwrap" style="margin-top:12px"><table id="ctable"></table></div></div>
+</section>
+
+<section id="tab-find" class="wrap hide" style="grid-template-columns:1fr">
+  <div class="card">
+    <b>Find the right part for your project</b>
+    <div class="grid" style="margin-top:12px">
+      <label>What do you need?<br><select id="fcat" style="width:100%"></select></label>
+      <label>Max budget (₹)<br><input type="number" id="fbud" value="500" min="0"></label>
+    </div>
+    <p class="mut">Board voltage is taken from the selector at the top.</p>
+    <div id="fres"></div>
+  </div>
+</section>
+
+<script src="components.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+let cur, st={}, board="uno";
+const cats=[...new Set(COMPONENTS.map(c=>c.cat))];
+const price=c=>`₹${c.specs.price[0]}–${c.specs.price[1]}`;
+
+function compat(c){ const v=BOARDS[board].v, s=c.specs;
+  if(s.vMin===0&&s.vMax>=v) return ["ok","Works with this board."];
+  if(v<s.vMin) return ["bad",`Needs ${s.vMin} V+, your board is ${v} V. Use a 5 V supply and level shifter, or pick another part.`];
+  if(v>s.vMax) return ["bad",`Max ${s.vMax} V. Your ${v} V board can damage it. Power from 3.3 V.`];
+  return ["ok",`Works at ${v} V.`]; }
+
+$("board").innerHTML=Object.entries(BOARDS).map(([k,b])=>`<option value=${k}>${b.name}</option>`).join("");
+$("board").onchange=e=>{board=e.target.value; if(cur) showCompat(); renderCompare(); renderFind();};
+
+// ---------- TEST TAB ----------
+function list(f=""){ let h="",last="";
+  COMPONENTS.filter(c=>(c.full+c.cat).toLowerCase().includes(f)).forEach(c=>{
+    if(c.cat!==last){h+=`<div class=cat>${c.cat}</div>`;last=c.cat}
+    h+=`<div class="item${cur&&cur.id===c.id?" on":""}" data-id=${c.id}>${c.name}</div>`});
+  $("list").innerHTML=h||"<p class=mut>No match.</p>";
+  document.querySelectorAll(".item").forEach(e=>e.onclick=()=>pick(e.dataset.id)); }
+function showCompat(){ const [l,t]=compat(cur); $("compat").innerHTML=`<span class=${l}>${l==="ok"?"✔":"✖"} ${t}</span>`; }
+function pick(id){ cur=COMPONENTS.find(c=>c.id===id); st={};
+  const s=cur.specs; $("name").textContent=cur.full;
+  $("spec").innerHTML=[s.measures,s.range,s.accuracy,s.iface,`${s.vMin}–${s.vMax} V`,price(cur)].map(x=>`<span class=tag>${x}</span>`).join("");
+  showCompat(); $("code").textContent=cur.code; $("mist").innerHTML=cur.mistakes.map(m=>`<li>${m}</li>`).join("");
+  $("ctls").innerHTML=cur.ctl.map(([l,k,a,b,d,step])=>{st[k]=d;
+    return `<div class=ctl><label><span>${l}</span><b id=v_${k}>${d}</b></label><input type=range min=${a} max=${b} step=${step||1} value=${d} data-k=${k}></div>`}).join("");
+  document.querySelectorAll("#ctls input").forEach(i=>i.oninput=()=>{st[i.dataset.k]=+i.value;$("v_"+i.dataset.k).textContent=i.value;update()});
+  $("serial").textContent=""; list($("q").value.toLowerCase()); update(); }
+const lim=(v,a,b)=>Math.max(a,Math.min(b,v));
+function update(){ const r=cur.read(st);
+  $("val").textContent=r.v; $("pins").textContent=r.pins; $("viz").textContent=r.emoji;
+  let bg="#0b0f18";
+  if(r.heat!=null) bg=`hsl(${lim(220-r.heat*2,0,220)},60%,${lim(12+r.heat/6,12,40)}%)`;
+  if(r.light!=null) bg=`hsl(50,80%,${lim(5+Math.log10(r.light+1)*12,5,70)}%)`;
+  if(r.color) bg=r.color;
+  $("viz").style.background=bg;
+  $("notes").innerHTML=r.notes?`<span class=${r.notes[0]}>${r.notes[1]}</span>`:""; return r; }
+setInterval(()=>{ if(!cur||$("tab-test").classList.contains("hide")) return;
+  const r=update(), s=$("serial"); s.textContent=(s.textContent+r.v+"\n").split("\n").slice(-40).join("\n"); s.scrollTop=1e9; },700);
+$("q").oninput=e=>list(e.target.value.toLowerCase());
+
+// ---------- COMPARE TAB ----------
+$("ccat").innerHTML=cats.map(c=>`<option>${c}</option>`).join(""); $("ccat").onchange=renderCompare;
+function renderCompare(){ const items=COMPONENTS.filter(c=>c.cat===$("ccat").value);
+  const rows=[["Measures/does",c=>c.specs.measures],["Range",c=>c.specs.range],["Accuracy",c=>c.specs.accuracy],["Interface",c=>c.specs.iface],
+    ["Supply",c=>`${c.specs.vMin}–${c.specs.vMax} V`],["Your board",c=>{const[l]=compat(c);return `<span class=${l}>${l==="ok"?"✔ OK":"✖ No"}</span>`}],["Price",price],["Watch out",c=>c.mistakes[0]]];
+  $("ctable").innerHTML=`<tr><th></th>${items.map(c=>`<th>${c.name}</th>`).join("")}</tr>`+rows.map(([h,f])=>`<tr><th>${h}</th>${items.map(c=>`<td>${f(c)}</td>`).join("")}</tr>`).join(""); }
+
+// ---------- FIND TAB ----------
+$("fcat").innerHTML=cats.map(c=>`<option>${c}</option>`).join("");
+[$("fcat"),$("fbud")].forEach(e=>e.oninput=renderFind);
+function renderFind(){ const bud=+$("fbud").value||0;
+  const items=COMPONENTS.filter(c=>c.cat===$("fcat").value).map(c=>({c,ok:compat(c)[0]==="ok"&&c.specs.price[0]<=bud}))
+    .sort((a,b)=>b.ok-a.ok||a.c.specs.price[0]-b.c.specs.price[0]);
+  $("fres").innerHTML=items.map(({c,ok})=>{const[l,t]=compat(c);const why=l!=="ok"?t:c.specs.price[0]>bud?"Over your budget.":"";
+    return `<div class=card style="background:#111827;margin:8px 0"><b>${ok?"✔":"✖"} ${c.full}</b> <span class=tag>${price(c)}</span><br>
+    <span class=mut>${c.specs.range} · ${c.specs.accuracy} · ${c.specs.iface}</span>${why?`<br><span class=${ok?"ok":"bad"}>${why}</span>`:""}
+    <br><button onclick="go('${c.id}')" style="margin-top:6px">Test it →</button></div>`}).join(""); }
+function go(id){ tab("test"); pick(id); }
+
+function tab(t){ document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.tab===t));
+  ["test","compare","find"].forEach(x=>$("tab-"+x).classList.toggle("hide",x!==t)); }
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>tab(b.dataset.tab));
+
+list(); pick("lm35"); renderCompare(); renderFind();
+</script></body></html>
