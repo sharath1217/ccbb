@@ -81,7 +81,7 @@ function applyProps(p) {
   host.classList.toggle('burnt', !!p.props.burnt);
   el.style.transform = p.rot ? `rotate(${p.rot}deg)` : '';
 }
-const INSERTABLE = ['resistor', 'led', 'pushbutton', 'pot', 'buzzer', 'switch', 'capacitor', 'ecap', 'diode', 'npn', 'pnp', 'nmos', 'reg7805', 'lm358', 'ne555', 'hc00', 'hc08', 'hc32', 'hc86', 'hc04', 'rgb'];
+const INSERTABLE = ['resistor', 'led', 'pushbutton', 'pot', 'buzzer', 'switch', 'capacitor', 'ecap', 'diode', 'npn', 'pnp', 'nmos', 'reg7805', 'lm358', 'ne555', 'hc00', 'hc08', 'hc32', 'hc86', 'hc04', 'rgb', 'at89s52', 'pic16f877a', 'atmega328', 'attiny85', 'lm35', 'ds18b20', 'zener', 'reed'];
 function placeHost(p) { const h = els.get(p.id).host; h.style.left = p.x + 'px'; h.style.top = p.y + 'px'; }
 const kids = bbId => S.parts.filter(q => S.wires.some(w => w.hidden && w.from.startsWith(q.id + ':') && w.to.startsWith(bbId + ':')));
 function tryInsert(p) {

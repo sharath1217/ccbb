@@ -266,9 +266,9 @@ void loop() {
       { id: 'uno1', type: 'uno', x: 30, y: 290, props: {} },
       { id: 'fl1', type: 'flame', x: 470, y: 70, props: { flame: 0 } },
       { id: 'bz1', type: 'buzzer', x: 520, y: 330, props: {} },
-      { id: 'lt1', type: 'lighter', x: 820, y: 90, props: { mode: 'lit' } }],
+      { id: 'lt1', type: 'lighter', x: 820, y: 90, props: { mode: 'off' } }],
     wires: [W('fl1:VCC', 'uno1:5V'), W('fl1:GND', 'uno1:GND.1'), W('fl1:DOUT', 'uno1:2'), W('bz1:1', 'uno1:8'), W('bz1:2', 'uno1:GND.2')],
-    code: `// GAME: drag the lit lighter towards the flame sensor. When it "sees" the flame the alarm sounds.\n// Then move it away. How far away does the sensor still detect it?\nvoid setup() {\n  pinMode(2, INPUT);     // flame sensor DOUT (LOW = flame)\n  pinMode(8, OUTPUT);    // buzzer\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  bool fire = digitalRead(2) == LOW;\n  digitalWrite(8, fire);\n  Serial.println(fire ? "FIRE! FIRE!" : "safe");\n  delay(200);\n}` },
+    code: `// GAME: click the lighter and set it to "lit". The IR flame sensor sees a flame up to ~80 cm away and the alarm sounds.\n// Try the torch instead: does a bright light fool the sensor?\nvoid setup() {\n  pinMode(2, INPUT);     // flame sensor DOUT (LOW = flame)\n  pinMode(8, OUTPUT);    // buzzer\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  bool fire = digitalRead(2) == LOW;\n  digitalWrite(8, fire);\n  Serial.println(fire ? "FIRE! FIRE!" : "safe");\n  delay(200);\n}` },
   gasleak: { name: '15 · Game: gas leak detector (gas can + fan)', parts: [
       { id: 'uno1', type: 'uno', x: 30, y: 290, props: {} },
       { id: 'mq1', type: 'gas', x: 470, y: 60, props: { ppm: 200, threshold: 40 } },
@@ -277,7 +277,7 @@ void loop() {
       { id: 'gc1', type: 'gascan', x: 800, y: 60, props: { on: false } },
       { id: 'fan1', type: 'fan', x: 820, y: 330, props: { on: false } }],
     wires: [W('mq1:VCC', 'uno1:5V'), W('mq1:GND', 'uno1:GND.1'), W('mq1:AOUT', 'uno1:A0'), W('uno1:13', 'r1:1'), W('r1:2', 'led1:A'), W('led1:C', 'uno1:GND.2')],
-    code: `// GAME: click the gas can, switch it to Spraying and drag it close to the MQ-2. The LED warns of a leak.\n// Then switch the fan ON and bring it close: the gas clears.\nconst int LIMIT = 400;\nvoid setup() {\n  pinMode(13, OUTPUT);\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  int gas = analogRead(A0);\n  digitalWrite(13, gas > LIMIT);\n  Serial.print("gas = "); Serial.println(gas);\n  delay(250);\n}` },
+    code: `// GAME: click the gas can, switch it to Spraying and drag it close to the MQ-2. The LED warns of a leak.\n// Then switch the fan ON and bring it close: the gas clears.\nconst int LIMIT = 500;\nvoid setup() {\n  pinMode(13, OUTPUT);\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  int gas = analogRead(A0);\n  digitalWrite(13, gas > LIMIT);\n  Serial.print("gas = "); Serial.println(gas);\n  delay(250);\n}` },
   c51: { name: '16 · 8051 (AT89S52) LED blink in Keil C', parts: [
       { id: 'bat1', type: 'battery', x: 40, y: 140, props: { volts: 4.5, rint: 0.3 } },
       { id: 'bb1', type: 'breadboard', x: 200, y: 60, props: {} },

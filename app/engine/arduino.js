@@ -12,6 +12,7 @@ const FN_TYPES = '(?:void|' + TYPES + ')';
 export function preprocessRegisterC(src, lang) {
   let s = src.replace(/\r/g, '');
   const bits = {};
+  s = s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');   // comments first, so text in them is never treated as code
   s = s.replace(/^\s*#(include|pragma|use|fuses).*$/gm, '').replace(/^\s*#define\s+_XTAL_FREQ.*$/gm, '');
   if (lang === 'c51') {
     s = s.replace(/\bsbit\s+(\w+)\s*=\s*(P[0-3])\s*\^\s*([0-7])\s*;/g, (m, n, port, b) => { bits[n] = port + '.' + b; return ''; });

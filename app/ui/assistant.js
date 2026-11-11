@@ -47,9 +47,11 @@ const TOOLS_HELP = 'Real-world tools are in the "Real world" group: drag the ðŸ”
 // ---------- offline tutor ----------
 export function offlineAnswer(q, ctx, BY_TYPE) {
   const t = q.toLowerCase(), out = [];
+  const GENERIC = ['sensor', 'module', 'temp', 'with', 'connect', 'arduino', 'board', 'chip', 'light', 'motor', 'switch', 'display', 'real', 'water', 'level', 'button'];
   const find = () => { const all = Object.entries(BY_TYPE).sort((a, b) => b[1].name.length - a[1].name.length);
-    for (const [type, c] of all) { const names = [c.name.toLowerCase(), type, ...c.name.toLowerCase().split(/[ (]/).filter(w => w.length > 3 && !['sensor', 'module', 'temp', 'with'].includes(w))];
-      if (names.some(n => t.includes(n))) return type; }
+    for (const [type, c] of all) if (t.includes(c.name.toLowerCase()) || new RegExp('\\b' + type + '\\b').test(t)) return type;          // full name or type id first
+    for (const [type, c] of all) { const words = c.name.toLowerCase().split(/[ (),Â·]+/).filter(w => w.length > 3 && !GENERIC.includes(w));
+      if (words.some(w => new RegExp('\\b' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(t))) return type; }
     return ctx.selected?.type || null; };
   const part = find(), c = part && BY_TYPE[part], d = part && INFO[part];
   if (/not work|doesn.?t work|wrong|problem|error|why|help|stuck|fix/.test(t)) {
