@@ -236,3 +236,10 @@ test('board constants: ESP8266 D-pins and STM32 PC13 resolve', () => {
   const r = createRunner({ pinMode() {} }, { board: BOARDS.esp8266 }); assert.equal(r.compile('').program ? 1 : 0, 1);
   assert.equal(BOARDS.esp8266.pin(2), 'D4'); assert.equal(BOARDS.esp32.pin(36), 'VP'); assert.equal(BOARDS.pico.pin(25), 'GP25'); assert.equal(BOARDS.bluepill.pin('PC13'), 'PC13');
 });
+test('PWM: 50 % duty on an LED gives half the average current of full on (real switching, not a lower voltage)', () => {
+  const parts = [P('u', 'uno'), P('r', 'resistor', { ohms: 220 }), P('l', 'led', { color: 'red' })];
+  const w = [W('u:9', 'r:1'), W('r:2', 'l:A'), W('l:C', 'u:GND.1')];
+  const full = run(parts, w, { mcu: 'u', pins: { 9: { mode: 'OUTPUT', v: 5 } } }).parts.l.current;
+  const half = run(parts, w, { mcu: 'u', pins: { 9: { mode: 'OUTPUT', v: 5, vhigh: 5, duty: 0.5 } } }).parts.l.current;
+  near(half, full / 2, 1e-4, 'average current');
+});

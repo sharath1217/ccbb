@@ -55,3 +55,4 @@ textarea{flex:1;border:0;outline:0;resize:none;padding:10px;font:12.5px/1.55 ui-
 .props{top:auto;bottom:12px;left:12px;right:auto}
 .part.seated .tag{opacity:0;transition:opacity .15s}.part.seated:hover .tag,.part.seated.sel .tag{opacity:1;z-index:3}
 svg.wires{pointer-events:none}.wire{pointer-events:stroke}
+.pal-search{width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 10px;font:inherit;margin-bottom:4px}.ctl{display:flex;gap:6px;align-items:center}.ctl b{min-width:58px;font-size:12px}.btn.mini{padding:3px 6px;font-size:11px;margin:1px}

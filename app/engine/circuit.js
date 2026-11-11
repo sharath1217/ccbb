@@ -261,8 +261,24 @@ function netlist(parts, topo, ctxFor, { zeroSources = false } = {}) {
   return { nodeCount: Math.max(n, 1), elements, node, key };
 }
 
-// Main entry. io = { mcu: partId, pins: {pinName:{mode,v}} }; opts = { dt (s), t (s), commit (bool) }
+// Main entry. io = { mcu: partId, pins: {pinName:{mode,v,duty}} }; opts = { dt (s), t (s), commit (bool) }
+// PWM pins (0 < duty < 1) really switch between 0 and VCC, so we solve both states and average them by duty cycle:
+// LED brightness and motor speed follow the average current, while warnings use the peak (HIGH) state.
 export function simulate(parts, wires, io = {}, opts = {}) {
+  const pwm = Object.entries(io.pins || {}).filter(([, s]) => s.mode === 'OUTPUT' && s.duty > 0 && s.duty < 1);
+  if (!pwm.length) return simulateOnce(parts, wires, io, opts);
+  const d = pwm.reduce((a, [, s]) => Math.max(a, s.duty), 0);             // one shared duty (exact for a single PWM pin)
+  const ioHi = { ...io, pins: { ...io.pins } }, ioLo = { ...io, pins: { ...io.pins } };
+  for (const [k, s] of pwm) { ioHi.pins[k] = { ...s, v: s.vhigh }; ioLo.pins[k] = { ...s, v: 0 }; }
+  const lo = simulateOnce(parts, wires, ioLo, { ...opts, commit: false }), hi = simulateOnce(parts, wires, ioHi, opts);
+  const mix = (a, b) => typeof a === 'number' && typeof b === 'number' ? a * (1 - d) + b * d : Array.isArray(a) && Array.isArray(b) ? a.map((x, i) => mix(x, b[i])) : b;
+  for (const id of Object.keys(hi.parts)) for (const k of Object.keys(hi.parts[id])) { if (k === 'burn') continue; const v = mix(lo.parts[id]?.[k], hi.parts[id][k]); hi.parts[id][k] = k === 'rpm' ? Math.round(v) : v; }
+  for (const k of Object.keys(hi.pinCurrent)) hi.pinCurrent[k] = mix(lo.pinCurrent[k] || 0, hi.pinCurrent[k]);
+  const vh = hi.voltAt, nh = hi.nodeVoltage;
+  hi.voltAt = (id, pin) => mix(lo.voltAt(id, pin), vh(id, pin)); hi.nodeVoltage = k => mix(lo.nodeVoltage(k), nh(k)); hi.duty = d;
+  return hi;
+}
+function simulateOnce(parts, wires, io = {}, opts = {}) {
   const { dt = 0, t = 0, commit = true } = opts;
   for (const p of parts) p.state ??= {};
   const topo = topology(parts, wires);

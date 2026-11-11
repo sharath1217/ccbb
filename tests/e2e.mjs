@@ -68,7 +68,7 @@ await test('Build from scratch by clicking: battery + 470 Ω + LED lights safely
   const p = await page('blink'); await p.evaluate(() => window.ccbb.setZoom(1));
   await p.click('#btnNew');
   await p.waitForFunction(() => window.ccbb.S.parts.length === 0 && window.ccbb.S.ready);
-  for (const name of ['9 V Battery', 'Resistor', 'LED']) await p.click(`.pal:has-text("${name}")`);
+  for (const t of ['battery', 'resistor', 'led']) await p.click(`.pal[data-type="${t}"]`);
   const ids = await p.evaluate(() => window.ccbb.S.parts.map(x => x.id));
   // drag each part by its name tag to its own spot (also tests dragging)
   const board = await p.locator('#world').boundingBox();
@@ -91,7 +91,7 @@ await test('Build from scratch by clicking: battery + 470 Ω + LED lights safely
   assert((await p.locator('.warn.bad').count()) > 0, 'expected a burn warning with 220 Ω on 9 V');
   // fix it: select resistor, pick 470 Ω, replace LED
   await p.locator(`[data-id="${r}"] .tag`).click();
-  await p.selectOption('#pOhm', '470');
+  await p.selectOption('#props [data-k="ohms"]', '470');
   await p.locator(`[data-id="${l}"] .tag`).click();
   await p.click('#pFix');
   await p.waitForTimeout(150);
@@ -131,8 +131,8 @@ await test('Dimmer: turning the knob changes analogRead and LED brightness', asy
   await p.click('#btnRun'); await p.waitForTimeout(400);
   const lvl = () => p.evaluate(() => window.ccbb.S.sim.parts.led1.current);
   await p.locator('[data-id="pot1"] .tag').click();
-  await p.locator('#pPos').fill('10'); await p.waitForTimeout(500); const low = await lvl();
-  await p.locator('#pPos').fill('95'); await p.waitForTimeout(500); const high = await lvl();
+  await p.locator('#props [data-k="pos"]').fill('10'); await p.waitForTimeout(500); const low = await lvl();
+  await p.locator('#props [data-k="pos"]').fill('95'); await p.waitForTimeout(500); const high = await lvl();
   assert(high > low * 3, `brightness should rise: ${low} → ${high}`);
   const lines = (await p.locator('#serial').innerText()).trim().split('\n');
   assert(/A0 = \d+/.test(lines.at(-1)), 'serial should print A0 values');
@@ -152,7 +152,7 @@ await test('Multimeter: divider reads ~6 V, Ω mode warns when powered, A mode r
 await test('Switch: battery LED turns off when the switch is flipped', async () => {
   const p = await page('battery'); await p.waitForTimeout(150);
   assert(await ledOn(p, 'led1'), 'LED should start on');
-  await p.locator('[data-id="sw1"] .tag').click(); await p.click('#pSw'); await p.waitForTimeout(150);
+  await p.locator('[data-id="sw1"] .tag').click(); await p.click('#props [data-t="on"]'); await p.waitForTimeout(150);
   assert(!(await ledOn(p, 'led1')), 'LED should go off');
   await p.close();
 });
@@ -189,7 +189,7 @@ await test('Delete key removes a selected part and its wires; work is autosaved'
 
 await test('Dropping an LED onto the breadboard snaps it into holes and connects it', async () => {
   const p = await page('blink'); await p.evaluate(() => window.ccbb.setZoom(1));
-  await p.click('.pal:has-text("LED")');
+  await p.click('.pal[data-type="led"]');
   const id = await p.evaluate(() => window.ccbb.S.parts.at(-1).id);
   const hole = await p.evaluate(() => window.ccbb.pinPos('bb1:H20'));
   const world = await p.locator('#world').boundingBox(), tag = await p.locator(`[data-id="${id}"] .tag`).boundingBox();
@@ -223,6 +223,89 @@ await test('All jumper wires are neat: only straight lines and right-angle bends
   assert(ds.length >= 6, 'expected wires');
   assert(ds.every(d => !/C/.test(d)), 'curvy wire found: ' + ds.find(d => /C/.test(d)));
   await p.close();
+});
+
+await test('Every one of the parts in the palette can be placed without errors', async () => {
+  const p = await page('blink'); await p.click('#btnNew'); await p.waitForFunction(() => window.ccbb.S.parts.length === 0 && window.ccbb.S.ready);
+  const types = await p.evaluate(() => [...document.querySelectorAll('.pal')].map(b => b.dataset.type));
+  assert(types.length >= 55, 'palette has only ' + types.length);
+  for (const t of types) { await p.evaluate(t => { const S = window.ccbb.S; if (S.parts.length >= 8) { window.ccbb.load({ parts: [], wires: [], code: '' }); } }, t); await p.waitForTimeout(20); await p.click(`.pal[data-type="${t}"]`); }
+  await p.waitForTimeout(300);
+  assert(p.errors.length === 0, 'errors: ' + p.errors.slice(0, 3).join(' | '));
+  await p.close();
+});
+
+await test('555 timer project blinks the LED on its own (no code)', async () => {
+  const p = await page('timer555'); const seen = new Set();
+  for (let i = 0; i < 40; i++) { seen.add(await ledOn(p, 'led1')); await p.waitForTimeout(100); }
+  assert(seen.has(true) && seen.has(false), 'LED did not blink: ' + [...seen]);
+  await shot(p, '7-555-timer'); assert(p.errors.length === 0, p.errors.join(' | ')); await p.close();
+});
+
+await test('Op-amp project: multimeter reads 3 × the knob voltage', async () => {
+  const p = await page('opamp'); await p.waitForTimeout(200);
+  const vin = await p.evaluate(() => window.ccbb.simNow().voltAt('pot1', 'SIG'));
+  const out = parseFloat(await reading(p, 'm1'));
+  assert(Math.abs(out - 3 * vin) < 0.02, `Vout ${out} vs 3×${vin.toFixed(3)}`);
+  await shot(p, '8-opamp'); await p.close();
+});
+
+await test('Logic gate project: AND output follows the switches', async () => {
+  const p = await page('gate'); await p.waitForTimeout(200);
+  assert(!(await ledOn(p, 'led1')), 'A=1,B=0 should be off');
+  await p.locator('[data-id="swB"] .tag').click(); await p.click('#props [data-t="on"]'); await p.waitForTimeout(200);
+  assert(await ledOn(p, 'led1'), 'A=1,B=1 should be on');
+  await shot(p, '9-logic-gate'); await p.close();
+});
+
+await test('MOSFET project: PWM code makes the motor speed up', async () => {
+  const p = await page('mosfet'); await p.click('#btnRun');
+  const rpm = []; for (let i = 0; i < 12; i++) { rpm.push(await p.evaluate(() => window.ccbb.S.sim.parts.mot1.rpm || 0)); await p.waitForTimeout(300); }
+  const ab = rpm.map(Math.abs); assert(Math.max(...ab) > 2000 && ab[0] < Math.max(...ab), 'rpm ' + rpm.join(','));
+  const bad = (await warnings(p)).filter(w => /damage|destroy/.test(w)); assert(!bad.length, bad.join());
+  await shot(p, '10-mosfet-motor'); await p.click('#btnStop'); await p.close();
+});
+
+await test('DHT22 + LCD project shows the temperature; the lighter heats it up', async () => {
+  const p = await page('weather'); await p.click('#btnRun'); await p.waitForTimeout(700);
+  let text = await p.evaluate(() => document.querySelector('[data-id="lcd1"] wokwi-lcd1602').text);
+  assert(/Temp: 27\.0 C/.test(text), 'LCD text: ' + text);
+  await p.evaluate(() => { window.ccbb.S.parts.find(x => x.id === 'dht1').props.lighter = 5; });
+  await p.waitForTimeout(2600);
+  text = await p.evaluate(() => document.querySelector('[data-id="lcd1"] wokwi-lcd1602').text);
+  assert(/Temp: 57\.0 C/.test(text), 'after lighter: ' + text);
+  await shot(p, '11-dht-lcd'); await p.click('#btnStop'); await p.close();
+});
+
+await test('Ultrasonic project: distance moves the servo', async () => {
+  const p = await page('radar'); await p.click('#btnRun'); await p.waitForTimeout(600);
+  const a1 = await p.evaluate(() => window.ccbb.S.parts.find(x => x.id === 'sv1').state.angle);
+  await p.evaluate(() => { window.ccbb.S.parts.find(x => x.id === 'us1').props.dist = 150; }); await p.waitForTimeout(600);
+  const a2 = await p.evaluate(() => window.ccbb.S.parts.find(x => x.id === 'sv1').state.angle);
+  assert(Math.abs(a1 - 45) <= 1 && Math.abs(a2 - 135) <= 1, `servo angles ${a1} → ${a2}`);
+  assert(/1(49|50) cm/.test(await p.locator('#serial').innerText()), 'serial distance');
+  await shot(p, '12-ultrasonic-servo'); await p.click('#btnStop'); await p.close();
+});
+
+await test('ESP32 project: code runs on the ESP32 and blinks its LED at 3.3 V', async () => {
+  const p = await page('esp32'); await p.click('#btnRun'); const seen = new Set();
+  for (let i = 0; i < 15; i++) { seen.add(await ledOn(p, 'led1')); await p.waitForTimeout(100); }
+  assert(seen.has(true) && seen.has(false), 'no blink');
+  assert(/ESP32/.test(await p.locator('#boardSel').innerText()), 'board label');
+  const v = await p.evaluate(() => { const s = window.ccbb.S; return s.sim.voltAt('esp1', '3V3'); }); assert(Math.abs(v - 3.3) < 0.05);
+  await shot(p, '13-esp32'); await p.click('#btnStop'); await p.close();
+});
+
+await test('Every microcontroller runs Blink on its built-in LED pin', async () => {
+  const p = await page('blink');
+  for (const t of ['uno', 'nano', 'mega', 'esp32', 'esp8266', 'pico', 'rp2040', 'bluepill']) {
+    await p.evaluate(t => window.ccbb.load({ parts: [{ id: 'm1', type: t, x: 60, y: 80, props: {} }], wires: [], code: 'void setup(){ pinMode(LED_BUILTIN, OUTPUT); }\nvoid loop(){ digitalWrite(LED_BUILTIN, HIGH); delay(150); digitalWrite(LED_BUILTIN, LOW); delay(150); }' }), t);
+    await p.waitForFunction(() => window.ccbb.S.ready); await p.click('#btnRun');
+    const vals = new Set(); for (let i = 0; i < 8; i++) { vals.add(await p.evaluate(() => { const s = window.ccbb.S, m = s.parts[0]; const pin = Object.keys(s.io.pins)[0]; return pin ? s.io.pins[pin].v : -1; })); await p.waitForTimeout(60); }
+    assert(vals.size >= 2, t + ' LED pin did not toggle: ' + [...vals]);
+    await p.click('#btnStop');
+  }
+  assert(p.errors.length === 0, p.errors.join(' | ')); await p.close();
 });
 
 await test('Code panel minimizes and restores', async () => {
