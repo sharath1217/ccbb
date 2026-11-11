@@ -26,7 +26,7 @@ async function page(project) {
   p.on('pageerror', e => p.errors.push(e.message)); p.on('console', m => { if (m.type() === 'error') p.errors.push(m.text()); });
   p.on('dialog', d => d.accept());
   await p.goto(base + (project ? '?project=' + project : ''));
-  await p.waitForFunction(() => window.ccbb && window.ccbb.S.sim);
+  await p.waitForFunction(() => window.ccbb && window.ccbb.S.sim && window.ccbb.S.ready);
   return p;
 }
 async function test(name, fn) {
@@ -41,8 +41,10 @@ const warnings = p => p.evaluate(() => window.ccbb.simNow().warnings.map(w => w.
 
 await test('app loads with no errors and draws parts, wires and pins', async () => {
   const p = await page('blink');
-  assert(await p.locator('.part').count() === 3, 'expected 3 parts');
-  assert(await p.locator('path.wire').count() === 3, 'expected 3 wires');
+  assert(await p.locator('.part').count() === 4, 'expected 4 parts (Uno, breadboard, resistor, LED)');
+  assert(await p.locator('path.wire').count() === 3, 'expected 3 jumper wires');
+  const ins = await p.evaluate(() => window.ccbb.S.wires.filter(w => w.hidden).map(w => w.from + '>' + w.to).sort().join(' '));
+  assert(ins === 'led1:A>bb1:A14 led1:C>bb1:A13 r1:1>bb1:C8 r1:2>bb1:C14', 'parts not seated in the right holes: ' + ins);
   assert(await p.locator('circle.pin').count() > 20, 'pins not drawn');
   assert(p.errors.length === 0, 'page errors: ' + p.errors.join(' | '));
   await p.close();
@@ -63,9 +65,9 @@ await test('Blink: Run makes the LED flash on and off, then Stop', async () => {
 });
 
 await test('Build from scratch by clicking: battery + 470 Ω + LED lights safely', async () => {
-  const p = await page('blink');
+  const p = await page('blink'); await p.evaluate(() => window.ccbb.setZoom(1));
   await p.click('#btnNew');
-  await p.waitForFunction(() => window.ccbb.S.parts.length === 0);
+  await p.waitForFunction(() => window.ccbb.S.parts.length === 0 && window.ccbb.S.ready);
   for (const name of ['9 V Battery', 'Resistor', 'LED']) await p.click(`.pal:has-text("${name}")`);
   const ids = await p.evaluate(() => window.ccbb.S.parts.map(x => x.id));
   // drag each part by its name tag to its own spot (also tests dragging)
@@ -179,9 +181,47 @@ await test('"Code from my circuit" writes runnable code for the wiring', async (
 await test('Delete key removes a selected part and its wires; work is autosaved', async () => {
   const p = await page('blink');
   await p.locator('[data-id="led1"] .tag').click(); await p.keyboard.press('Delete');
-  assert(await p.locator('.part').count() === 2 && await p.locator('path.wire').count() === 1, 'delete failed');
-  await p.goto(base); await p.waitForFunction(() => window.ccbb && window.ccbb.S.sim);
-  assert(await p.locator('.part').count() === 2, 'autosave/restore failed');
+  assert(await p.locator('.part').count() === 3 && !(await p.evaluate(() => window.ccbb.S.wires.some(w => w.from.startsWith('led1') || w.to.startsWith('led1')))), 'delete failed');
+  await p.goto(base); await p.waitForFunction(() => window.ccbb && window.ccbb.S.sim && window.ccbb.S.ready);
+  assert(await p.locator('.part').count() === 3, 'autosave/restore failed');
+  await p.close();
+});
+
+await test('Dropping an LED onto the breadboard snaps it into holes and connects it', async () => {
+  const p = await page('blink'); await p.evaluate(() => window.ccbb.setZoom(1));
+  await p.click('.pal:has-text("LED")');
+  const id = await p.evaluate(() => window.ccbb.S.parts.at(-1).id);
+  const hole = await p.evaluate(() => window.ccbb.pinPos('bb1:H20'));
+  const world = await p.locator('#world').boundingBox(), tag = await p.locator(`[data-id="${id}"] .tag`).boundingBox();
+  const pin = await p.evaluate(id => window.ccbb.pinPos(id + ':C'), id);
+  const grabX = tag.x + 5, grabY = tag.y + 5;
+  await p.mouse.move(grabX, grabY); await p.mouse.down();
+  await p.mouse.move(grabX + (world.x + hole[0]) - (world.x + pin[0]) + 3, grabY + (world.y + hole[1]) - (world.y + pin[1]) - 2, { steps: 8 }); await p.mouse.up();
+  await p.waitForTimeout(150);
+  const ins = await p.evaluate(id => window.ccbb.S.wires.filter(w => w.hidden && w.from.startsWith(id)).map(w => w.from.split(':')[1] + '>' + w.to.split(':')[1]).sort().join(' '), id);
+  assert(ins === 'A>H21 C>H20', 'LED did not snap into H20/H21: ' + ins);
+  const after = await p.evaluate(id => window.ccbb.pinPos(id + ':C'), id);
+  assert(Math.hypot(after[0] - hole[0], after[1] - hole[1]) < 0.6, 'LED leg not centred on hole');
+  await p.close();
+});
+
+await test('Moving the breadboard carries its parts with it', async () => {
+  const p = await page('blink'); await p.evaluate(() => window.ccbb.setZoom(1));
+  const before = await p.evaluate(() => window.ccbb.S.parts.find(q => q.id === 'led1').x);
+  const t = await p.locator('[data-id="bb1"] .tag').boundingBox();
+  await p.mouse.move(t.x + 5, t.y + 5); await p.mouse.down(); await p.mouse.move(t.x + 101, t.y + 53, { steps: 5 }); await p.mouse.up();
+  await p.waitForTimeout(150);
+  const after = await p.evaluate(() => window.ccbb.S.parts.find(q => q.id === 'led1').x);
+  assert(Math.abs(after - before - 96) < 6, `LED should move with board: ${before} → ${after}`);
+  assert(await p.evaluate(() => window.ccbb.S.wires.filter(w => w.hidden && w.from.startsWith('led1')).length) === 2, 'LED should stay seated');
+  await p.close();
+});
+
+await test('All jumper wires are neat: only straight lines and right-angle bends', async () => {
+  const p = await page('dimmer'); await p.waitForTimeout(300);
+  const ds = await p.evaluate(() => [...document.querySelectorAll('path.wire')].map(x => x.getAttribute('d')));
+  assert(ds.length >= 6, 'expected wires');
+  assert(ds.every(d => !/C/.test(d)), 'curvy wire found: ' + ds.find(d => /C/.test(d)));
   await p.close();
 });
 

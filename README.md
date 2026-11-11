@@ -4,6 +4,8 @@ Test components before you buy them. Build circuits, simulate, measure and learn
 
 ## Circuit Studio (working app)
 Open `app/index.html` through a local server (`npm start`, then http://localhost:8000/app/).
+- Breadboard: parts snap into holes and connect like a real one (a–e, f–j columns, power rails); moving the board carries its parts
+- Neat wiring: wires leave pins straight and use right-angle bends; grid snapping; zoom
 - Add parts, drag them, click pin → pin to wire
 - Real DC circuit simulation (nodal analysis + LED/diode model): LED current and brightness, burnt LEDs, short circuits, pin overcurrent, resistor overheating
 - Run Arduino Uno code (beginner Arduino C: setup/loop, pinMode, digital/analog read/write, delay, millis, Serial, map...)
@@ -11,7 +13,7 @@ Open `app/index.html` through a local server (`npm start`, then http://localhost
 - Current shown flowing along wires; hover pins for voltage
 - 6 starter projects, autosave, save/open file, "Code from my circuit"
 
-Tests: `npm test` (26 engine/unit tests + 12 browser tests).
+Tests: `npm test` (27 engine/unit tests + 15 browser tests).
 
 ## Earlier prototypes
 - `index.html` + `components.js`: Component Test Lab (32 parts, compare, part finder)

@@ -115,3 +115,14 @@ test('blue LED needs more voltage: 3.3 V + 100 Ω gives only a few mA', () => {
   const s = simulate(parts, [W('u:3.3V', 'r:1'), W('r:2', 'l:A'), W('l:C', 'u:GND.1')]);
   assert.ok(s.parts.l.current < 0.004, 'got ' + s.parts.l.current);
 });
+
+test('breadboard: same column (a–e) connects, across the channel does not, rails run along', () => {
+  const parts = [{ id: 'b', type: 'battery', props: { volts: 9, rint: 0 } }, { id: 'bb', type: 'breadboard', props: {} }, { id: 'r', type: 'resistor', props: { ohms: 1000 } }];
+  // battery + → A5, resistor from E5 to TN1 rail, battery − → TN30 (rail continuity)
+  let s = simulate(parts, [W('b:+', 'bb:A5'), W('r:1', 'bb:E5'), W('r:2', 'bb:TN1'), W('b:-', 'bb:TN30')]);
+  near(s.parts.r.current, 0.009, 1e-4, 'column + rail should conduct');
+  s = simulate(parts, [W('b:+', 'bb:A5'), W('r:1', 'bb:F5'), W('r:2', 'bb:TN1'), W('b:-', 'bb:TN30')]);
+  assert.ok(Math.abs(s.parts.r.current) < 1e-6, 'across the centre channel must not conduct');
+  s = simulate(parts, [W('b:+', 'bb:A5'), W('r:1', 'bb:A6'), W('r:2', 'bb:TN1'), W('b:-', 'bb:TN30')]);
+  assert.ok(Math.abs(s.parts.r.current) < 1e-6, 'neighbour columns must not conduct');
+});

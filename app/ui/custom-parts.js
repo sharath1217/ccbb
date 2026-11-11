@@ -38,3 +38,32 @@ class CbMultimeter extends HTMLElement {
 }
 customElements.define('cb-battery', CbBattery);
 customElements.define('cb-multimeter', CbMultimeter);
+
+// ---------------- Breadboard (half size, 30 columns) ----------------
+// Hole pitch 9.6 px = 2.54 mm at 96 dpi, matching the Wokwi part graphics so legs line up with holes.
+export const BB = { P: 9.6, X0: 16, cols: 30, rows: { TN: 12, TP: 21.6, A: 44, B: 53.6, C: 63.2, D: 72.8, E: 82.4, F: 111.2, G: 120.8, H: 130.4, I: 140, J: 149.6, BP: 172.8, BN: 182.4 }, W: 16 * 2 + 29 * 9.6, H: 196 };
+export function bbHoles() {
+  const out = [];
+  for (const [r, y] of Object.entries(BB.rows)) for (let c = 1; c <= BB.cols; c++) out.push({ name: r + c, x: BB.X0 + (c - 1) * BB.P, y });
+  return out;
+}
+const HOLES = bbHoles();
+class CbBreadboard extends HTMLElement {
+  connectedCallback() {
+    const P = BB.P, R = BB.rows;
+    const hole = h => `<rect x="${h.x - 1.6}" y="${h.y - 1.6}" width="3.2" height="3.2" rx=".6" fill="#3b3f46"/>`;
+    const line = (y, c) => `<line x1="${BB.X0 - 4}" x2="${BB.W - BB.X0 + 4}" y1="${y}" y2="${y}" stroke="${c}" stroke-width="1.2"/>`;
+    const nums = [1, 5, 10, 15, 20, 25, 30].map(c => `<text x="${BB.X0 + (c - 1) * P}" y="${R.A - 7}" text-anchor="middle">${c}</text><text x="${BB.X0 + (c - 1) * P}" y="${R.J + 12}" text-anchor="middle">${c}</text>`).join('');
+    const letters = 'ABCDEFGHIJ'.split('').map(l => `<text x="7" y="${R[l] + 2.5}" text-anchor="middle">${l.toLowerCase()}</text><text x="${BB.W - 7}" y="${R[l] + 2.5}" text-anchor="middle">${l.toLowerCase()}</text>`).join('');
+    this.innerHTML = `<svg width="${BB.W}" height="${BB.H}" viewBox="0 0 ${BB.W} ${BB.H}">
+      <rect x=".5" y=".5" width="${BB.W - 1}" height="${BB.H - 1}" rx="5" fill="#f4f2ec" stroke="#d8d3c6"/>
+      <rect x="4" y="${(R.E + R.F) / 2 - 4}" width="${BB.W - 8}" height="8" rx="2" fill="#e6e2d8"/>
+      ${line(R.TN - 6, '#2563eb')}${line(R.TP + 6, '#dc2626')}${line(R.BP - 6, '#dc2626')}${line(R.BN + 6, '#2563eb')}
+      <g font-family="Arial" font-size="6" fill="#9a958a">${nums}${letters}
+      <text x="7" y="${R.TN + 2.5}" text-anchor="middle" fill="#2563eb" font-size="8">−</text><text x="7" y="${R.TP + 2.5}" text-anchor="middle" fill="#dc2626" font-size="8">+</text>
+      <text x="7" y="${R.BP + 2.5}" text-anchor="middle" fill="#dc2626" font-size="8">+</text><text x="7" y="${R.BN + 2.5}" text-anchor="middle" fill="#2563eb" font-size="8">−</text></g>
+      ${HOLES.map(hole).join('')}</svg>`;
+  }
+  get pinInfo() { return HOLES; }
+}
+customElements.define('cb-breadboard', CbBreadboard);

@@ -3,6 +3,7 @@ import { createRunner } from '../engine/arduino.js';
 import { CATALOG, BY_TYPE, PROJECTS } from './catalog.js';
 
 const $ = id => document.getElementById(id);
+let Z = 1.25;
 const S = { parts: [], wires: [], selected: null, pending: null, io: { pins: {} }, sim: null, runner: null, nextId: 1 };
 const els = new Map(); // part id -> {host, el}
 
@@ -56,11 +57,40 @@ function applyProps(p) {
   if (p.type === 'uno') el.ledPower = true;
   host.classList.toggle('burnt', !!p.props.burnt);
 }
+const INSERTABLE = ['resistor', 'led', 'pushbutton', 'pot', 'buzzer', 'switch'];
+function placeHost(p) { const h = els.get(p.id).host; h.style.left = p.x + 'px'; h.style.top = p.y + 'px'; }
+const kids = bbId => S.parts.filter(q => S.wires.some(w => w.hidden && w.from.startsWith(q.id + ':') && w.to.startsWith(bbId + ':')));
+function tryInsert(p) {
+  S.wires = S.wires.filter(w => !(w.hidden && w.from.startsWith(p.id + ':')));
+  if (!INSERTABLE.includes(p.type)) return false;
+  const pins = (PIN_LIST[p.type] || []).map(n => [n, pinPos(p.id + ':' + n)]).filter(x => x[1]);
+  let best = null;
+  for (const bb of S.parts.filter(q => q.type === 'breadboard')) {
+    const holes = els.get(bb.id).el.pinInfo, o = pinPos(bb.id + ':' + holes[0].name); if (!o) continue;
+    const ox = o[0] - holes[0].x, oy = o[1] - holes[0].y;
+    for (const [, [x, y]] of pins) for (const h of holes) { const dx = ox + h.x - x, dy = oy + h.y - y, d = Math.hypot(dx, dy);
+      if (d < 6.5 && (!best || d < best.d)) best = { d, dx, dy, bb, ox, oy, holes }; }
+  }
+  if (!best) return false;
+  p.x += best.dx; p.y += best.dy; placeHost(p);
+  for (const n of PIN_LIST[p.type]) { const xy = pinPos(p.id + ':' + n); if (!xy) continue;
+    const h = best.holes.find(h => Math.hypot(best.ox + h.x - xy[0], best.oy + h.y - xy[1]) < 4.5);
+    if (h) S.wires.push({ from: p.id + ':' + n, to: best.bb.id + ':' + h.name, hidden: true }); }
+  return true;
+}
 function startDrag(e, p) {
   const sx = e.clientX, sy = e.clientY, ox = p.x, oy = p.y; let moved = false;
-  const mv = ev => { const dx = ev.clientX - sx, dy = ev.clientY - sy; if (!moved && Math.hypot(dx, dy) < 3) return; moved = true;
-    p.x = Math.max(0, ox + dx); p.y = Math.max(30, oy + dy); const h = els.get(p.id).host; h.style.left = p.x + 'px'; h.style.top = p.y + 'px'; drawWires(); drawPins(); };
-  const up = () => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up); if (moved) save(); };
+  const riders = p.type === 'breadboard' ? kids(p.id).map(q => [q, q.x, q.y]) : [];
+  const mv = ev => { const dx = (ev.clientX - sx) / Z, dy = (ev.clientY - sy) / Z; if (!moved && Math.hypot(dx, dy) < 3) return; moved = true;
+    p.x = Math.max(0, ox + dx); p.y = Math.max(30, oy + dy); placeHost(p);
+    for (const [q, qx, qy] of riders) { q.x = qx + (p.x - ox); q.y = qy + (p.y - oy); placeHost(q); }
+    drawWires(); drawPins(); };
+  const up = () => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up);
+    if (!moved) return;
+    if (!tryInsert(p)) { const g = 4.8, nx = Math.round(p.x / g) * g, ny = Math.round(p.y / g) * g;
+      for (const [q] of riders) { q.x += nx - p.x; q.y += ny - p.y; placeHost(q); }
+      p.x = nx; p.y = ny; placeHost(p); }
+    changed(); };
   addEventListener('pointermove', mv); addEventListener('pointerup', up);
 }
 function removePart(id) {
@@ -73,31 +103,62 @@ function pinPos(key) {
   const [id, pin] = key.split(/:(.+)/); const r = els.get(id); if (!r) return null;
   const info = (r.el.pinInfo || []).find(q => q.name === pin); if (!info) return null;
   const w = $('world').getBoundingClientRect(), b = r.el.getBoundingClientRect();
-  const sc = r.el.offsetWidth ? b.width / r.el.offsetWidth : 1;
-  return [b.left - w.left + info.x * sc, b.top - w.top + info.y * sc];
+  const sc = r.el.offsetWidth ? b.width / Z / r.el.offsetWidth : 1;
+  return [(b.left - w.left) / Z + info.x * sc, (b.top - w.top) / Z + info.y * sc];
 }
 const isGnd = k => /:(GND[.\d]*|-|COM)$/.test(k), isPwr = k => /:(5V|3\.3V|\+|VCC|VIN)$/.test(k);
 const PALETTE = ['#2f5bea', '#16a34a', '#f59e0b', '#9333ea', '#0891b2', '#db2777'];
 const wireColor = (w, i) => isGnd(w.from) || isGnd(w.to) ? '#2b2f36' : isPwr(w.from) || isPwr(w.to) ? '#dc2626' : PALETTE[i % PALETTE.length];
-function wirePath(a, b) { const dy = Math.max(40, Math.abs(b[0] - a[0]) * .25);
-  const up = (a[1] + b[1]) / 2 > Math.min(a[1], b[1]) ? -1 : 1;
-  return `M${a[0]},${a[1]} C${a[0]},${a[1] + up * dy} ${b[0]},${b[1] + up * dy} ${b[0]},${b[1]}`; }
-
+// Neat routing: leave each pin straight out of its part's edge, then use right-angle turns.
+function exitDir(key, xy) {
+  const [id] = key.split(':'); const p = S.parts.find(q => q.id === id); if (!p || p.type === 'breadboard') return null;
+  const r = els.get(id).el.getBoundingClientRect(), w = $('world').getBoundingClientRect();
+  const top = (r.top - w.top) / Z, h = r.height / Z, left = (r.left - w.left) / Z, wd = r.width / Z;
+  const fy = (xy[1] - top) / h, fx = (xy[0] - left) / wd;
+  if (fy > 0.75) return [0, 1]; if (fy < 0.25) return [0, -1]; return fx < 0.5 ? [-1, 0] : [1, 0];
+}
+function rounded(pts) {
+  pts = pts.filter((q, i) => i === 0 || Math.hypot(q[0] - pts[i - 1][0], q[1] - pts[i - 1][1]) > 0.5);
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [px, py] = pts[i - 1], [x, y] = pts[i], [nx, ny] = pts[i + 1];
+    const r = Math.min(6, Math.hypot(x - px, y - py) / 2, Math.hypot(nx - x, ny - y) / 2);
+    const ux = Math.sign(x - px), uy = Math.sign(y - py), vx = Math.sign(nx - x), vy = Math.sign(ny - y);
+    d += ` L${x - ux * r},${y - uy * r} Q${x},${y} ${x + vx * r},${y + vy * r}`;
+  }
+  const l = pts.at(-1); return d + ` L${l[0]},${l[1]}`;
+}
+function wirePath(a, b, lane = 0, ka = '', kb = '') {
+  let da = exitDir(ka, a), db = exitDir(kb, b);
+  if (!da && db) { [a, b, da, db] = [b, a, db, da]; }
+  const L = 14 + lane;
+  if (!da) { // hole to hole: one bend
+    if (Math.abs(a[0] - b[0]) < 1 || Math.abs(a[1] - b[1]) < 1) return `M${a[0]},${a[1]} L${b[0]},${b[1]}`;
+    return rounded([a, [a[0], b[1]], b]); }
+  const a1 = [a[0] + da[0] * L, a[1] + da[1] * L];
+  const b1 = db ? [b[0] + db[0] * L, b[1] + db[1] * L] : b;
+  const mid = da[1] !== 0 ? [[b1[0], a1[1]]] : [[a1[0], b1[1]]];
+  return rounded([a, a1, ...mid, b1, b]);
+}
 // ---------------- drawing ----------------
 let flowOffset = 0;
 function drawWires() {
   const svg = $('wires');
-  svg.innerHTML = S.wires.map((w, i) => { const a = pinPos(w.from), b = pinPos(w.to); if (!a || !b) return '';
-    const d = wirePath(a, b), sel = S.selected?.wire === i ? ' sel' : '';
+  let lane = 0;
+  svg.innerHTML = S.wires.map((w, i) => { if (w.hidden) return ''; const a = pinPos(w.from), b = pinPos(w.to); if (!a || !b) return '';
+    const d = wirePath(a, b, (lane++ % 5) * 4.8, w.from, w.to), sel = S.selected?.wire === i ? ' sel' : '';
     return `<path class="wire${sel}" data-i="${i}" d="${d}" stroke="${wireColor(w, i)}"/><path class="flow" data-f="${i}" d="${d}"/>`; }).join('')
     + (S.pending?.mouse ? (() => { const a = pinPos(S.pending.from); return a ? `<path class="ghost" d="M${a[0]},${a[1]} L${S.pending.mouse[0]},${S.pending.mouse[1]}"/>` : ''; })() : '');
 }
+let holesVisible = true;
 function drawPins() {
   let h = '';
   for (const p of S.parts) for (const pin of PIN_LIST[p.type] || []) {
     if (p.type === 'uno' && ['A5.2', 'A4.2', 'AREF', 'IOREF', 'RESET'].includes(pin)) continue;
     const k = p.id + ':' + pin, xy = pinPos(k); if (!xy) continue;
-    h += `<circle class="pin${S.pending?.from === k ? ' armed' : ''}" data-k="${k}" cx="${xy[0]}" cy="${xy[1]}" r="4"/>`;
+    const hole = p.type === 'breadboard';
+    if (hole && !S.pending && !holesVisible) continue;
+    h += `<circle class="pin${hole ? ' hole' : ''}${S.pending?.from === k ? ' armed' : ''}" data-k="${k}" cx="${xy[0]}" cy="${xy[1]}" r="${hole ? 3.6 : 4}"/>`;
   }
   $('pins').innerHTML = h;
 }
@@ -110,7 +171,7 @@ $('pins').addEventListener('click', e => {
 });
 $('wires').addEventListener('click', e => { const i = e.target.dataset?.i; if (i !== undefined) selectThing({ wire: +i }); });
 $('world').addEventListener('pointermove', e => {
-  const w = $('world').getBoundingClientRect(), x = e.clientX - w.left, y = e.clientY - w.top;
+  const w = $('world').getBoundingClientRect(), x = (e.clientX - w.left) / Z, y = (e.clientY - w.top) / Z;
   if (S.pending) { S.pending.mouse = [x, y]; drawWires(); }
   const k = e.target.dataset?.k, wi = e.target.dataset?.i, tip = $('tip');
   if (S.sim && (k || wi !== undefined)) {
@@ -169,7 +230,9 @@ function refreshProps() {
 // ---------------- simulation ----------------
 let queued = false;
 function changed() { save(); if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; runSim(); drawWires(); drawPins(); }); } }
+function markSeated() { for (const p of S.parts) els.get(p.id)?.host.classList.toggle('seated', S.wires.some(w => w.hidden && w.from.startsWith(p.id + ':'))); }
 function runSim() {
+  markSeated();
   S.sim = simulate(S.parts, S.wires, S.io);
   let reburn = false;
   for (const p of S.parts) { const r = S.sim.parts[p.id] || {}, { el } = els.get(p.id);
@@ -264,11 +327,18 @@ $('btnMin').onclick = () => { $('code').classList.toggle('min'); setTimeout(() =
 
 // ---------------- projects, save, load ----------------
 function load(data) {
-  stopCode(); for (const r of els.values()) r.host.remove(); els.clear();
+  S.ready = false; stopCode(); for (const r of els.values()) r.host.remove(); els.clear();
   S.parts = structuredClone(data.parts || []); S.wires = structuredClone(data.wires || []);
   S.nextId = 1 + Math.max(0, ...S.parts.map(p => +(p.id.match(/\d+$/)?.[0] || 0)));
   S.parts.forEach(mountPart); $('src').value = data.code || ''; gutter(); selectThing(null);
-  customElements.whenDefined('wokwi-arduino-uno').then(() => { requestAnimationFrame(() => changed()); setTimeout(() => { drawWires(); drawPins(); }, 250); });
+  Promise.all(['wokwi-arduino-uno', 'wokwi-led', 'wokwi-resistor', 'cb-breadboard'].map(t => customElements.whenDefined(t))).then(() => setTimeout(() => {
+    for (const p of S.parts) if (p.at) {
+      const hole = pinPos(p.at.bb + ':' + p.at.hole), pin = pinPos(p.id + ':' + p.at.pin);
+      if (hole && pin) { p.x += hole[0] - pin[0]; p.y += hole[1] - pin[1]; placeHost(p); tryInsert(p); }
+      delete p.at;
+    }
+    changed(); setTimeout(() => { drawWires(); drawPins(); requestAnimationFrame(() => { S.ready = true; }); }, 200);
+  }, 60));
 }
 $('projects').onchange = e => { if (e.target.value) load(PROJECTS[e.target.value]); e.target.value = ''; };
 $('btnNew').onclick = () => { if (confirm('Start a new empty circuit?')) load({ parts: [], wires: [], code: 'void setup() {\n\n}\n\nvoid loop() {\n\n}\n' }); };
@@ -279,8 +349,10 @@ const snapshot = () => ({ version: 1, parts: S.parts, wires: S.wires, code: $('s
 function save() { try { localStorage.setItem('ccbb.circuit', JSON.stringify(snapshot())); } catch {} }
 addEventListener('resize', () => { drawWires(); drawPins(); });
 
+function setZoom(z) { Z = Math.max(0.6, Math.min(2.2, Math.round(z * 100) / 100)); $('world').style.transform = `scale(${Z})`; $('zoomLbl').textContent = Math.round(Z * 100) + '%'; drawWires(); drawPins(); }
+$('zIn').onclick = () => setZoom(Z + 0.15); $('zOut').onclick = () => setZoom(Z - 0.15); setZoom(Z);
 // expose for tests / power users
-window.ccbb = { S, load, addPart, connect: (from, to) => { S.wires.push({ from, to }); changed(); }, simNow: () => (runSim(), S.sim), pinPos, PROJECTS };
+window.ccbb = { get Z() { return Z; }, setZoom, S, load, addPart, connect: (from, to) => { S.wires.push({ from, to }); changed(); }, simNow: () => (runSim(), S.sim), pinPos, PROJECTS };
 
 let initial = null; try { initial = JSON.parse(localStorage.getItem('ccbb.circuit')); } catch {}
 const q = new URLSearchParams(location.search).get('project');

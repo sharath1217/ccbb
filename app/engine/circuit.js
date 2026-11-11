@@ -32,7 +32,14 @@ export const MODELS = {
   meter: { elements: p => p.props.mode === 'A' ? [{ type:'R', a:'V', b:'COM', r:0.1, tag:'shunt' }] : [{ type:'R', a:'V', b:'COM', r:10e6, tag:'input' }] },
 };
 
+const BB_ROWS = ['TN','TP','A','B','C','D','E','F','G','H','I','J','BP','BN'];
+const BB_PINS = BB_ROWS.flatMap(r => Array.from({ length: 30 }, (_, i) => r + (i + 1)));
+const BB_TIES = [];
+for (let c = 1; c <= 30; c++) { for (const grp of ['ABCDE', 'FGHIJ']) for (let i = 0; i < 4; i++) BB_TIES.push([grp[i] + c, grp[i + 1] + c]); }
+for (const r of ['TN', 'TP', 'BP', 'BN']) for (let c = 1; c < 30; c++) BB_TIES.push([r + c, r + (c + 1)]);
+MODELS.breadboard = { ties: BB_TIES, elements: () => [] };
 export const PIN_LIST = {
+  breadboard: BB_PINS,
   uno: ['A5.2','A4.2','AREF','GND.1','13','12','11','10','9','8','7','6','5','4','3','2','1','0','IOREF','RESET','3.3V','5V','GND.2','GND.3','VIN','A0','A1','A2','A3','A4','A5'],
   battery: ['+','-'], resistor: ['1','2'], led: ['A','C'], pushbutton: ['1.l','2.l','1.r','2.r'],
   switch: ['1','2','3'], pot: ['GND','SIG','VCC'], buzzer: ['1','2'], meter: ['COM','V'],
