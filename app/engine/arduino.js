@@ -1,7 +1,9 @@
 // Arduino sketch runner: translates beginner Arduino C/C++ into async JavaScript and runs it
 // against simulated pins. Supports: setup/loop, pinMode, digitalWrite/Read, analogWrite/Read,
 // delay, millis, micros, Serial.print/println, tone/noTone, map, constrain, random, #define,
-// global/local variables, arrays, user functions. Not supported: classes, pointers, libraries.
+// global/local variables, arrays, user functions, pulseIn, and these libraries: DHT, Servo,
+// LiquidCrystal_I2C, Adafruit_SSD1306 (text + basic shapes). Not supported: your own classes, pointers.
+export const LIBS = ['DHT', 'Servo', 'LiquidCrystal_I2C', 'Adafruit_SSD1306'];
 const TYPES = '(?:unsigned\\s+)?(?:int|long|float|double|bool|boolean|byte|char|String|uint8_t|uint16_t|uint32_t|int8_t|int16_t|int32_t|word|short|size_t)';
 const FN_TYPES = '(?:void|' + TYPES + ')';
 
@@ -9,12 +11,17 @@ export function transpile(src) {
   let s = src.replace(/\r/g, '');
   s = s.replace(/^\s*#include.*$/gm, '');
   s = s.replace(/^\s*#define\s+(\w+)\s+(.+)$/gm, 'const $1 = $2;');
+  s = s.replace(/&\s*Wire\b/g, 'Wire');
+  s = s.replace(new RegExp('\\b(' + LIBS.join('|') + ')\\s+(\\w+)\\s*(?:\\(([^;]*)\\))?\\s*;', 'g'), (m, cls, name, args) => `let ${name} = new ${cls}(${args || ''});`);
   const fnNames = [];
   s = s.replace(new RegExp('\\b' + FN_TYPES + '\\s+([A-Za-z_]\\w*)\\s*\\(([^)]*)\\)\\s*\\{', 'g'), (m, name, params) => {
     fnNames.push(name);
     const ps = params.trim() === 'void' ? '' : params.split(',').map(x => x.trim().split(/\s+/).pop().replace(/[\[\]&*]/g, '')).filter(Boolean).join(', ');
     return `async function ${name}(${ps}) {`;
   });
+  const INTS = '(?:unsigned\\s+)?(?:int|long|byte|short|word|uint8_t|uint16_t|uint32_t|int8_t|int16_t|int32_t|size_t)';
+  s = s.replace(new RegExp('\\b((?:static\\s+)?(?:const\\s+)?' + INTS + ')\\s+([A-Za-z_]\\w*)\\s*=\\s*([^;{}]+);', 'g'), (m, t, n, e) =>
+    /^\s*-?\d+\s*$/.test(e) || /,\s*[A-Za-z_]\w*\s*=/.test(e) ? m : `${t} ${n} = __int(${e});`);
   s = s.replace(new RegExp('\\b(?:static\\s+)?(?:const\\s+)?(?:volatile\\s+)?' + TYPES + '\\s+(?=[A-Za-z_])', 'g'), 'let ');
   s = s.replace(/let\s+(\w+)\s*\[\s*\w*\s*\]\s*=\s*\{([^}]*)\}/g, 'let $1 = [$2]');
   s = s.replace(/let\s+(\w+)\s*\[\s*(\w+)\s*\]\s*;/g, 'let $1 = new Array($2).fill(0);');
@@ -28,7 +35,7 @@ export function transpile(src) {
 export class Stop extends Error {}
 
 // io: { pinMode, digitalWrite, analogWrite, digitalRead, analogRead, serial, tone, noTone, onChange }
-export function createRunner(io, { speed = 1, now = () => performance.now(), sleep } = {}) {
+export function createRunner(io, { speed = 1, now = () => performance.now(), sleep, board } = {}) {
   let stopped = false, t0 = 0;
   const realSleep = sleep || (ms => new Promise(r => setTimeout(r, ms)));
   const delay = async ms => { if (stopped) throw new Stop(); await realSleep(Math.max(0, ms) / speed); if (stopped) throw new Stop(); };
@@ -36,6 +43,33 @@ export function createRunner(io, { speed = 1, now = () => performance.now(), sle
   const api = {
     HIGH: 1, LOW: 0, OUTPUT: 'OUTPUT', INPUT: 'INPUT', INPUT_PULLUP: 'INPUT_PULLUP', LED_BUILTIN: 13, true: true, false: false,
     A0: 'A0', A1: 'A1', A2: 'A2', A3: 'A3', A4: 'A4', A5: 'A5', DEC: 10, HEX: 16, BIN: 2, PI: Math.PI,
+    INPUT_PULLDOWN: 'INPUT_PULLDOWN', DHT11: 11, DHT22: 22, SSD1306_SWITCHCAPVCC: 2, SSD1306_WHITE: 1, SSD1306_BLACK: 0, WHITE: 1, BLACK: 0,
+    Wire: { begin: () => {}, setClock: () => {} },
+    pulseIn: (p, level = 1, timeout = 1e6) => io.pulseIn ? io.pulseIn(pin(p), level, timeout) : 0,
+    DHT: class { constructor(p, type) { this.pin = pin(p); this.type = type; this.last = -1e9; this.cache = null; }
+      begin() {} read() { const t = now(); if (t - this.last >= 2000 / speed || !this.cache) { this.cache = io.lib?.dht?.(this.pin) || null; this.last = t; } return this.cache; }
+      readTemperature(f) { const r = this.read(); return r ? (f ? r.t * 9 / 5 + 32 : r.t) : NaN; }
+      readHumidity() { const r = this.read(); return r ? r.h : NaN; } },
+    Servo: class { attach(p) { this.pin = pin(p); this.a = 90; return 1; } detach() { this.pin = null; } attached() { return !!this.pin; }
+      write(a) { this.a = Math.max(0, Math.min(180, Math.round(a))); if (this.pin) io.lib?.servo?.(this.pin, this.a); }
+      writeMicroseconds(us) { this.write((us - 544) / (2400 - 544) * 180); } read() { return this.a; } },
+    LiquidCrystal_I2C: class { constructor(addr = 0x27, cols = 16, rows = 2) { Object.assign(this, { addr, cols, rows, x: 0, y: 0, bl: true }); this.buf = Array.from({ length: rows }, () => ' '.repeat(cols)); }
+      push() { io.lib?.lcd?.(this.addr, this.buf.slice(), this.bl); }
+      init() { this.push(); } begin() { this.push(); } backlight() { this.bl = true; this.push(); } noBacklight() { this.bl = false; this.push(); }
+      clear() { this.buf = this.buf.map(() => ' '.repeat(this.cols)); this.x = this.y = 0; this.push(); } home() { this.x = this.y = 0; }
+      setCursor(x, y) { this.x = x; this.y = y; }
+      print(v, d) { let t = typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(d ?? 2) : String(v);
+        const row = this.buf[this.y]; if (row === undefined) return; this.buf[this.y] = (row.slice(0, this.x) + t + row.slice(this.x + t.length)).slice(0, this.cols); this.x += t.length; this.push(); } },
+    Adafruit_SSD1306: class { constructor(w = 128, h = 64) { Object.assign(this, { w, h, ops: [], size: 1, x: 0, y: 0, color: 1 }); }
+      begin() { return true; } clearDisplay() { this.ops = []; } display() { io.lib?.oled?.(this.ops.slice()); }
+      setTextSize(n) { this.size = n; } setTextColor(c) { this.color = c; } setCursor(x, y) { this.x = x; this.y = y; }
+      print(v, d) { const t = typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(d ?? 2) : String(v); this.ops.push(['text', this.x, this.y, this.size, t, this.color]); this.x += t.length * 6 * this.size; }
+      println(v = '', d) { this.print(v, d); this.x = 0; this.y += 8 * this.size; }
+      drawPixel(x, y, c = 1) { this.ops.push(['px', x, y, c]); } drawLine(a, b, c2, d, c = 1) { this.ops.push(['line', a, b, c2, d, c]); }
+      drawRect(x, y, w, h, c = 1) { this.ops.push(['rect', x, y, w, h, c, 0]); } fillRect(x, y, w, h, c = 1) { this.ops.push(['rect', x, y, w, h, c, 1]); }
+      drawCircle(x, y, r, c = 1) { this.ops.push(['circle', x, y, r, c, 0]); } fillCircle(x, y, r, c = 1) { this.ops.push(['circle', x, y, r, c, 1]); } },
+    ...(board?.consts || {}),
+    __int: v => typeof v === 'number' ? Math.trunc(v) : v,
     pinMode: (p, m) => io.pinMode(pin(p), m),
     digitalWrite: (p, v) => io.digitalWrite(pin(p), v ? 1 : 0),
     analogWrite: (p, v) => io.analogWrite(pin(p), Math.max(0, Math.min(255, Math.round(v)))),
@@ -51,17 +85,18 @@ export function createRunner(io, { speed = 1, now = () => performance.now(), sle
     Serial: { begin: () => {}, available: () => 0, read: () => -1,
       print: (v, base) => io.serial(fmtNum(v, base)), println: (v = '', base) => io.serial(fmtNum(v, base) + '\n') },
   };
+  // Arduino: print(int, base) for base 2/8/16, print(float, digits) otherwise
   function fmtNum(v, base) {
-    if (typeof v === 'number' && base && base !== 10 && base < 10) return Math.trunc(v).toString(base);
-    if (typeof v === 'number' && base === 16) return Math.trunc(v).toString(16).toUpperCase();
-    if (typeof v === 'number' && !Number.isInteger(v)) return v.toFixed(typeof base === 'number' && base <= 6 ? base : 2);
+    if (typeof v !== 'number') return String(v);
+    if (Number.isInteger(v) && (base === 2 || base === 8 || base === 16)) return Math.trunc(v).toString(base).toUpperCase();
+    if (!Number.isInteger(v) || (base !== undefined && base !== 10 && !Number.isInteger(v))) return v.toFixed(base !== undefined && base <= 7 ? base : 2);
     return String(v);
   }
   return {
     compile(src) {
       const js = transpile(src);
       const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-      const names = Object.keys(api).filter(k => k !== 'true' && k !== 'false');
+      const names = Object.keys(api).filter(k => k !== 'true' && k !== 'false' && /^[A-Za-z_]\w*$/.test(k));
       const factory = new Function(...names, `"use strict";\n${js}\nreturn { setup: typeof setup==='function'?setup:async()=>{}, loop: typeof loop==='function'?loop:async()=>{} };`);
       return { js, program: factory(...names.map(n => api[n])) };
     },
