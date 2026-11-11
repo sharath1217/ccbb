@@ -94,9 +94,9 @@ svgPart('cb-ecap', { w: 22, h: 44, pins: [{ name: '+', x: 6.2, y: 44 }, { name: 
 svgPart('cb-diode', { w: 38.4, h: 12, pins: [{ name: 'A', x: 0, y: 6 }, { name: 'K', x: 38.4, y: 6 }], props: ['kind'],
   draw: el => `<line x1="0" y1="6" x2="38.4" y2="6" stroke="#a9adb5" stroke-width="1.6"/><rect x="10" y="2" width="18.4" height="8" rx="2" fill="${el.getAttribute('kind') === 'schottky' ? '#2a2a2e' : '#222'}"/><rect x="24" y="2" width="2.6" height="8" fill="#d6d9de"/>` });
 // TO-92 transistor (BC547/BC557): pins C B E left→right, flat face toward you
-svgPart('cb-to92', { w: 26, h: 40, pins: [{ name: 'C', x: 3.4, y: 40 }, { name: 'B', x: 13, y: 40 }, { name: 'E', x: 22.6, y: 40 }], props: ['label'],
+svgPart('cb-to92', { w: 26, h: 40, pins: function () { const n = (this.getAttribute('pinnames') || 'C,B,E').split(','); return n.map((name, i) => ({ name, x: 3.4 + i * 9.6, y: 40 })); }, props: ['label', 'pinnames'],
   draw: el => `${leg(3.4, 20, 40)}${leg(13, 20, 40)}${leg(22.6, 20, 40)}<path d="M1 21 V8 a12 8 0 0 1 24 0 V21 Z" fill="#26282c"/>${txt(13, 15, el.getAttribute('label') || 'BC547', 5.2)}
-    ${txt(3.4, 48, 'C', 5, '#6b7385')}${txt(13, 48, 'B', 5, '#6b7385')}${txt(22.6, 48, 'E', 5, '#6b7385')}` });
+    ${(el.getAttribute('pinnames') || 'C,B,E').split(',').map((n, i) => txt(3.4 + i * 9.6, 48, n, 4.2, '#6b7385')).join('')}` });
 // TO-220 (MOSFET G D S, 7805 IN GND OUT)
 svgPart('cb-to220', { w: 30, h: 66, pins: function () { const n = (this.getAttribute('pins') || 'G,D,S').split(','); return n.map((name, i) => ({ name, x: 5.4 + i * PT, y: 66 })); }, props: ['label', 'pins'],
   draw: el => { const n = (el.getAttribute('pins') || 'G,D,S').split(',');
@@ -132,7 +132,7 @@ svgPart('cb-l298n', { w: 120, h: 110, pins: [['OUT1', 4, 30], ['OUT2', 4, 60], [
     ${txt(62, 32, 'L298N', 8)}<rect x="0" y="22" width="14" height="46" rx="2" fill="#2563eb"/>${txt(30, 96, '12V GND 5V', 6, '#fff', 'middle')}${txt(92, 96, 'ENA IN1 IN2', 6, '#fff')}
     ${[30, 45, 60, 80, 92, 104].map(x => `<rect x="${x - 3}" y="98" width="6" height="8" fill="#1d4ed8"/>`).join('')}` });
 // Generic dual-row development boards (Pico, NodeMCU, Blue Pill)
-const BOARD_LOOK = { pico: { color: '#1d8a3e', label: 'Raspberry Pi Pico', chip: 'RP2040', rowGap: 7, usb: 'top' }, esp8266: { color: '#1b1c20', label: 'NodeMCU ESP8266', chip: 'ESP-12E', rowGap: 9, usb: 'bottom' }, bluepill: { color: '#1e40af', label: 'STM32 Blue Pill', chip: 'STM32F103', rowGap: 6, usb: 'top' } };
+const BOARD_LOOK = { leonardo: { color: '#0e7490', label: 'Arduino Leonardo', chip: 'ATmega32U4', rowGap: 8, usb: 'top' }, promini: { color: '#0e6ba8', label: 'Pro Mini 5V', chip: '328P', rowGap: 6, usb: 'none' }, esp32c3: { color: '#1b1c20', label: 'ESP32-C3 Super Mini', chip: 'C3', rowGap: 6, usb: 'top' }, esp32s3: { color: '#1b1c20', label: 'ESP32-S3 DevKitC', chip: 'ESP32-S3', rowGap: 9, usb: 'bottom' }, picow: { color: '#1d8a3e', label: 'Raspberry Pi Pico W', chip: 'RP2040', rowGap: 7, usb: 'top' }, pico: { color: '#1d8a3e', label: 'Raspberry Pi Pico', chip: 'RP2040', rowGap: 7, usb: 'top' }, esp8266: { color: '#1b1c20', label: 'NodeMCU ESP8266', chip: 'ESP-12E', rowGap: 9, usb: 'bottom' }, bluepill: { color: '#1e40af', label: 'STM32 Blue Pill', chip: 'STM32F103', rowGap: 6, usb: 'top' } };
 for (const [kind, look] of Object.entries(BOARD_LOOK)) {
   const L = BOARD_PINS[kind].left, Rt = BOARD_PINS[kind].right, rows = Math.max(L.length, Rt.length), W = (look.rowGap + 1) * PT + 40, H = rows * PT + 44;
   const pins = [...L.map((name, i) => ({ name, x: 20, y: 26 + i * PT })), ...Rt.map((name, i) => ({ name, x: 20 + look.rowGap * PT, y: 26 + i * PT }))];
@@ -171,3 +171,42 @@ customElements.define('cb-scope', class extends HTMLElement {
       <line x1="60" y1="202" x2="60" y2="208" stroke="#7c5e10" stroke-width="2"/><line x1="120" y1="202" x2="120" y2="208" stroke="#0c4a6e" stroke-width="2"/><line x1="200" y1="202" x2="200" y2="208" stroke="#111" stroke-width="2"/></svg>`;
   }
 });
+
+
+// Generic sensor / breakout module: coloured PCB with a header row along the bottom
+svgPart('cb-module', { w: 0, h: 0, props: ['label', 'pins', 'color'],
+  pins: function () { const n = (this.getAttribute('pins') || 'VCC,GND,OUT').split(','); const w = Math.max(60, n.length * 9.6 + 20); return n.map((name, i) => ({ name, x: (w - (n.length - 1) * 9.6) / 2 + i * 9.6, y: 58 })); }, draw: () => '' });
+customElements.get('cb-module').prototype.render = function () {
+  const n = (this.getAttribute('pins') || 'VCC,GND,OUT').split(','), w = Math.max(60, n.length * 9.6 + 20), c = this.getAttribute('color') || '#1e40af', x0 = (w - (n.length - 1) * 9.6) / 2;
+  this.innerHTML = `<svg width="${w}" height="58" viewBox="0 0 ${w} 58" style="overflow:visible"><rect x="0" y="0" width="${w}" height="44" rx="4" fill="${c}"/><circle cx="7" cy="7" r="3" fill="#f4f2ec"/><circle cx="${w - 7}" cy="7" r="3" fill="#f4f2ec"/>
+    <rect x="${w / 2 - 12}" y="6" width="24" height="14" rx="2" fill="#16171a"/>${txt(w / 2, 31, this.getAttribute('label') || '', 6.4, '#fff')}
+    ${n.map((p, i) => `<rect x="${x0 + i * 9.6 - 3}" y="40" width="6" height="8" fill="#16171a"/>${leg(x0 + i * 9.6, 46, 58)}${txt(x0 + i * 9.6, 38.5, p, 3.6, '#e5e7eb', 'middle', 600)}`).join('')}</svg>`;
+};
+svgPart('cb-reed', { w: 48, h: 14, pins: [{ name: '1', x: 0, y: 7 }, { name: '2', x: 48, y: 7 }], draw: () => `<line x1="0" y1="7" x2="48" y2="7" stroke="#a9adb5" stroke-width="1.4"/><rect x="10" y="2.5" width="28" height="9" rx="4.5" fill="#d9f2ff" stroke="#9cc7de" opacity=".9"/><line x1="12" y1="7" x2="25" y2="6" stroke="#8a6d1d" stroke-width="1.2"/><line x1="23" y1="8" x2="36" y2="7" stroke="#8a6d1d" stroke-width="1.2"/>` });
+// zener: diode graphic with a bent band
+const _d = customElements.get('cb-diode').prototype.render;
+customElements.get('cb-diode').prototype.render = function () { _d.call(this); if (this.getAttribute('kind') === 'zener') this.querySelector('svg').insertAdjacentHTML('beforeend', `<rect x="10" y="2" width="18.4" height="8" rx="2" fill="#c2410c"/><rect x="24" y="2" width="2.6" height="8" fill="#111"/>`); };
+
+// Real-world tools
+const TOOL_ART = {
+  lighter: el => { const m = el.getAttribute('mode') || 'off';
+    return `<rect x="14" y="26" width="22" height="44" rx="5" fill="#dc2626"/><rect x="14" y="26" width="22" height="9" rx="2" fill="#b91c1c"/><rect x="15" y="14" width="20" height="13" rx="2" fill="#c9ccd2"/><circle cx="29" cy="20" r="4" fill="#8a8f99"/>
+      ${m === 'lit' ? '<path d="M25 13 C17 2 26 -6 25 -14 C33 -6 35 4 25 13 Z" fill="#f59e0b"><animate attributeName="d" dur="0.25s" repeatCount="indefinite" values="M25 13 C17 2 26 -6 25 -14 C33 -6 35 4 25 13 Z;M25 13 C18 3 24 -5 27 -13 C32 -5 34 5 25 13 Z;M25 13 C17 2 26 -6 25 -14 C33 -6 35 4 25 13 Z"/></path><path d="M25 12 C21 5 25 0 25 -5 C29 1 29 7 25 12 Z" fill="#fde68a"/>' : ''}
+      ${m === 'gas' ? '<g fill="#a5b4fc" opacity=".6"><circle cx="22" cy="6" r="3"><animate attributeName="cy" from="10" to="-12" dur="1s" repeatCount="indefinite"/></circle><circle cx="29" cy="2" r="2.4"><animate attributeName="cy" from="10" to="-14" dur="1.3s" repeatCount="indefinite"/></circle></g>' : ''}`; },
+  fan: el => `<rect x="21" y="44" width="8" height="22" fill="#9aa0a8"/><rect x="10" y="64" width="30" height="6" rx="2" fill="#6b7280"/><circle cx="25" cy="26" r="22" fill="#e0f2fe" stroke="#64748b" stroke-width="2"/>
+    <g>${el.getAttribute('on') === '1' ? '<animateTransform attributeName="transform" type="rotate" from="0 25 26" to="360 25 26" dur="0.4s" repeatCount="indefinite"/>' : ''}${[0, 120, 240].map(a => `<ellipse cx="25" cy="14" rx="6" ry="11" fill="#38bdf8" transform="rotate(${a} 25 26)"/>`).join('')}<circle cx="25" cy="26" r="4" fill="#334155"/></g>`,
+  gascan: el => `<rect x="12" y="20" width="26" height="50" rx="6" fill="#ea580c"/><rect x="18" y="10" width="14" height="11" rx="2" fill="#9aa0a8"/><rect x="30" y="6" width="10" height="5" fill="#6b7280"/>${txt(25, 50, 'LPG', 8, '#fff')}
+    ${el.getAttribute('on') === '1' ? '<g fill="#c7d2fe" opacity=".7"><circle cx="46" cy="8" r="4"><animate attributeName="cx" from="42" to="70" dur="0.8s" repeatCount="indefinite"/></circle><circle cx="50" cy="4" r="3"><animate attributeName="cx" from="42" to="66" dur="1.1s" repeatCount="indefinite"/></circle></g>' : ''}`,
+  incense: el => `<rect x="10" y="62" width="30" height="8" rx="3" fill="#78350f"/><line x1="25" y1="62" x2="25" y2="20" stroke="#92400e" stroke-width="2.4"/><circle cx="25" cy="20" r="2" fill="${el.getAttribute('on') === '1' ? '#f97316' : '#57534e'}"/>
+    ${el.getAttribute('on') === '1' ? '<path d="M25 18 C20 10 30 4 24 -6 C20 -12 28 -18 25 -24" fill="none" stroke="#9ca3af" stroke-width="2" opacity=".7"><animate attributeName="opacity" values=".8;.3;.8" dur="2s" repeatCount="indefinite"/></path>' : ''}`,
+  torch: el => `${el.getAttribute('on') === '1' ? '<path d="M38 12 L90 -8 L90 52 L38 32 Z" fill="#fde68a" opacity=".55"/>' : ''}<rect x="4" y="14" width="30" height="16" rx="4" fill="#1f2937"/><rect x="32" y="10" width="8" height="24" rx="2" fill="#9ca3af"/><rect x="14" y="18" width="6" height="8" rx="1" fill="#ef4444"/>`,
+  hand: () => `<path d="M14 70 L14 36 C14 30 22 30 22 36 L22 12 C22 6 30 6 30 12 L30 32 L30 8 C30 2 38 2 38 8 L38 34 L38 14 C38 8 46 8 46 14 L46 48 C46 62 38 70 28 70 Z" fill="#f2c094" stroke="#c48a5a" stroke-width="1.6"/><path d="M14 46 C8 40 2 44 6 50 L14 60" fill="#f2c094" stroke="#c48a5a" stroke-width="1.6"/>`,
+  ice: () => `<rect x="8" y="22" width="36" height="36" rx="7" fill="#bae6fd" stroke="#7dd3fc" stroke-width="2" opacity=".9"/><path d="M14 30 L24 26" stroke="#fff" stroke-width="3" stroke-linecap="round"/>${txt(26, 48, '0 °C', 7, '#0369a1')}`,
+  water: () => `<path d="M10 16 L42 16 L38 70 L14 70 Z" fill="#e0f2fe" stroke="#94a3b8" stroke-width="1.6"/><path d="M12.5 34 L39.5 34 L38 70 L14 70 Z" fill="#38bdf8" opacity=".8"/><circle cx="26" cy="6" r="3" fill="#38bdf8"/>`,
+  speaker: el => `<rect x="6" y="14" width="34" height="52" rx="5" fill="#1f2937"/><circle cx="23" cy="48" r="11" fill="#374151" stroke="#111"/><circle cx="23" cy="48" r="4" fill="#6b7280"/><circle cx="23" cy="26" r="5" fill="#374151"/>
+    ${el.getAttribute('on') === '1' ? '<g fill="none" stroke="#f59e0b" stroke-width="2.4"><path d="M44 36 q8 12 0 24"><animate attributeName="opacity" values="1;.2;1" dur=".6s" repeatCount="indefinite"/></path><path d="M50 30 q13 18 0 36"><animate attributeName="opacity" values=".2;1;.2" dur=".6s" repeatCount="indefinite"/></path></g>' : ''}`,
+  magnet: () => `<path d="M8 10 L8 44 A18 18 0 0 0 44 44 L44 10 L32 10 L32 44 A6 6 0 0 1 20 44 L20 10 Z" fill="#dc2626"/><rect x="8" y="10" width="12" height="12" fill="#e5e7eb"/><rect x="32" y="10" width="12" height="12" fill="#e5e7eb"/>${txt(14, 34, 'N', 8, '#fff')}${txt(38, 34, 'S', 8, '#fff')}`,
+  rfidcard: () => `<rect x="2" y="16" width="56" height="36" rx="5" fill="#f8fafc" stroke="#94a3b8"/><rect x="8" y="24" width="12" height="9" rx="2" fill="#d4a843"/><path d="M34 26 q6 8 0 16 M40 22 q10 12 0 24" fill="none" stroke="#64748b" stroke-width="1.6"/>${txt(30, 49, 'RFID', 6, '#334155')}`,
+};
+svgPart('cb-tool', { w: 60, h: 74, pins: [], props: ['kind', 'on', 'mode'],
+  draw: el => `<g>${(TOOL_ART[el.getAttribute('kind')] || (() => ''))(el)}</g>` });

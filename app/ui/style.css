@@ -67,3 +67,12 @@ svg.wires{pointer-events:none}.wire{pointer-events:stroke}
 .mbody{min-height:150px;font-size:14.5px;line-height:1.55}.mbody table,.bom{border-collapse:collapse;width:100%;font-size:13.5px}.mbody td,.bom td,.bom th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}.mbody td:first-child{color:var(--mut);width:38%}
 .bom .num{text-align:right;white-space:nowrap}.bom .tot td{font-weight:800;border-top:2px solid var(--ink)}
 .brand{color:inherit;text-decoration:none}
+.warn.info{background:#eff6ff;color:#1e3a8a;border:1px solid #bfdbfe}
+.btn.ask{background:linear-gradient(90deg,#4f46e5,#0f9d8f);color:#fff;border:0}
+.assist{top:56px;right:12px;width:360px;max-height:calc(100% - 80px);display:flex;flex-direction:column;z-index:6;padding:10px}.assist[hidden]{display:none}
+.ahd{display:flex;align-items:center;gap:8px;margin-bottom:6px}.aset{background:#f6f2e8;border-radius:10px;padding:8px;margin-bottom:6px;display:grid;gap:6px}.aset input[type=password]{border:1px solid var(--line);border-radius:8px;padding:7px;font:inherit}
+.amsgs{flex:1;overflow:auto;display:flex;flex-direction:column;gap:6px;min-height:120px;max-height:52vh;padding:2px}
+.amsg{padding:8px 10px;border-radius:12px;font-size:13.5px;line-height:1.5;max-width:92%}.amsg.bot{background:#f1f5f9;align-self:flex-start}.amsg.me{background:var(--acc);color:#fff;align-self:flex-end}
+.amsg pre{background:#1c2230;color:#d1fae5;padding:8px;border-radius:8px;overflow:auto;font-size:12px;margin:6px 0;white-space:pre}
+.achips{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0}.achips button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:4px 9px;font:12px inherit;cursor:pointer}
+.ain{display:flex;gap:6px}.ain input{flex:1;border:1px solid var(--line);border-radius:9px;padding:8px;font:inherit}

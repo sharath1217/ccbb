@@ -18,6 +18,7 @@
   <label class="btn">Open file<input id="fileIn" type="file" accept=".json" hidden></label>
   <span class="grow"></span>
   <button id="btnBom" class="btn">🧾 Parts &amp; cost</button>
+  <button id="btnAsk" class="btn ask">🤖 Ask assistant</button>
   <span id="simState" class="pill">● Live</span>
 </header>
 <div class="steps"><b>①</b> Click a part on the left to add it <b>②</b> Click a pin, then another pin, to connect a wire <b>③</b> Press <b>Run</b> to start your code. <span class="mut">Drag a part by its name tag · R rotates · double-click for info · Delete removes · Ctrl+Z undo</span></div>
@@ -33,6 +34,18 @@
     <div class="zoom"><button class="btn icon" id="zOut" title="Zoom out">−</button><span id="zoomLbl">125%</span><button class="btn icon" id="zIn" title="Zoom in">+</button></div>
     <div class="panel props" id="props" hidden></div>
     <div class="panel warns" id="warns"></div>
+    <div class="panel assist" id="assist" hidden>
+      <div class="ahd"><b>🤖 Lab assistant</b><span class="grow"></span><button class="link" id="aSet">⚙ Claude</button><button class="link" id="aClose">✕</button></div>
+      <div class="aset" id="aSettings" hidden>
+        <p class="mut small">Works offline by default. For full answers from Claude, paste an Anthropic API key (your teacher can give one). It is sent only to Anthropic, straight from this browser.</p>
+        <input id="aKey" type="password" placeholder="sk-ant-… (optional)" autocomplete="off">
+        <label class="small"><input type="checkbox" id="aRemember"> Remember on this device</label>
+        <select id="aModel"><option value="claude-opus-5-5">Claude Opus 5.5 (default)</option><option value="claude-sonnet-5-5">Claude Sonnet 5.5</option><option value="claude-haiku-5-5">Claude Haiku 5.5</option></select>
+      </div>
+      <div class="amsgs" id="aMsgs"><div class="amsg bot">Hi! I can see your circuit. Ask me things like <b>"why is my LED not working?"</b>, <b>"how do I connect the DHT22?"</b>, <b>"code for the ultrasonic sensor"</b> or <b>"how do I test the gas sensor?"</b></div></div>
+      <div class="achips" id="aChips"><button>Why is my circuit not working?</button><button>How do I test this sensor?</button><button>Give me example code</button></div>
+      <form class="ain" id="aForm"><input id="aIn" placeholder="Ask about your circuit…" autocomplete="off"><button class="btn run">Send</button></form>
+    </div>
   </section>
   <aside class="code" id="code">
     <div class="code-hd">

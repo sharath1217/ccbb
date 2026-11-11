@@ -298,8 +298,10 @@ await test('ESP32 project: code runs on the ESP32 and blinks its LED at 3.3 V', 
 
 await test('Every microcontroller runs Blink on its built-in LED pin', async () => {
   const p = await page('blink');
-  for (const t of ['uno', 'nano', 'mega', 'esp32', 'esp8266', 'pico', 'rp2040', 'bluepill']) {
-    await p.evaluate(t => window.ccbb.load({ parts: [{ id: 'm1', type: t, x: 60, y: 80, props: {} }], wires: [], code: 'void setup(){ pinMode(LED_BUILTIN, OUTPUT); }\nvoid loop(){ digitalWrite(LED_BUILTIN, HIGH); delay(150); digitalWrite(LED_BUILTIN, LOW); delay(150); }' }), t);
+  for (const t of ['uno', 'nano', 'mega', 'esp32', 'esp8266', 'pico', 'rp2040', 'bluepill', 'leonardo', 'promini', 'esp32c3', 'esp32s3', 'picow', 'atmega328', 'attiny85']) {
+    const ext = { atmega328: ['7', '8'], attiny85: ['8', '4'] }[t];
+    await p.evaluate(([t, ext]) => window.ccbb.load({ parts: [{ id: 'm1', type: t, x: 60, y: 80, props: {} }, ...(ext ? [{ id: 'b1', type: 'battery', x: 400, y: 80, props: { volts: 5, rint: 0.1 } }] : [])],
+      wires: ext ? [{ from: 'b1:+', to: 'm1:' + ext[0] }, { from: 'b1:-', to: 'm1:' + ext[1] }] : [], code: 'void setup(){ pinMode(LED_BUILTIN, OUTPUT); }\nvoid loop(){ digitalWrite(LED_BUILTIN, HIGH); delay(150); digitalWrite(LED_BUILTIN, LOW); delay(150); }' }), [t, ext]);
     await p.waitForFunction(() => window.ccbb.S.ready); await p.click('#btnRun');
     const vals = new Set(); for (let i = 0; i < 8; i++) { vals.add(await p.evaluate(() => { const s = window.ccbb.S, m = s.parts[0]; const pin = Object.keys(s.io.pins)[0]; return pin ? s.io.pins[pin].v : -1; })); await p.waitForTimeout(60); }
     assert(vals.size >= 2, t + ' LED pin did not toggle: ' + [...vals]);
@@ -374,6 +376,50 @@ await test('Home page: every lesson link opens its project without errors', asyn
     assert(await p.locator('.part').count() > 1, 'empty project ' + l); }
   const man = JSON.parse(fs.readFileSync(path.join(root, 'app/manifest.webmanifest'), 'utf8')); assert(man.name && man.icons.length && man.start_url, 'manifest');
   assert(errs.length === 0, errs.join(' | ')); await ctx.close();
+});
+
+const dragTo = async (p, id, tx, ty) => { await p.evaluate(() => window.ccbb.setZoom(1)); const t = await p.locator(`[data-id="${id}"] .tag`).boundingBox(); const w = await p.locator('#world').boundingBox();
+  const cur = await p.evaluate(id => { const q = window.ccbb.S.parts.find(x => x.id === id); return [q.x, q.y]; }, id);
+  await p.mouse.move(t.x + 5, t.y + 5); await p.mouse.down(); await p.mouse.move(t.x + 5 + (tx - cur[0]), t.y + 5 + (ty - cur[1]), { steps: 10 }); await p.mouse.up(); await p.waitForTimeout(300); };
+const partXY = (p, id) => p.evaluate(id => { const q = window.ccbb.S.parts.find(x => x.id === id); return [q.x, q.y]; }, id);
+
+await test('Game: bringing the lit lighter to the flame sensor sounds the fire alarm', async () => {
+  const p = await page('fire'); await p.click('#btnRun'); await p.waitForTimeout(500);
+  assert(/safe/.test(await p.locator('#serial').innerText()) && !(await p.evaluate(() => document.querySelector('[data-id="bz1"] wokwi-buzzer').hasSignal)), 'should start safe');
+  const [fx, fy] = await partXY(p, 'fl1'); await dragTo(p, 'lt1', fx + 40, fy - 30); await p.waitForTimeout(700);
+  assert(/FIRE/.test(await p.locator('#serial').innerText()) && await p.evaluate(() => document.querySelector('[data-id="bz1"] wokwi-buzzer').hasSignal), 'alarm did not go off');
+  await shot(p, '17-fire-game'); await p.click('#btnStop'); await p.close();
+});
+
+await test('Game: spraying gas near the MQ-2 lights the warning LED; the fan clears it', async () => {
+  const p = await page('gasleak'); await p.click('#btnRun'); await p.waitForTimeout(500);
+  assert(!(await ledOn(p, 'led1')), 'no leak at start');
+  await p.locator('[data-id="gc1"] .tag').click(); await p.click('#props [data-t="on"]');
+  const [gx, gy] = await partXY(p, 'mq1'); await dragTo(p, 'gc1', gx + 150, gy); await p.waitForTimeout(800);
+  assert(await ledOn(p, 'led1'), 'leak not detected: ' + (await p.locator('#serial').innerText()).split('\n').slice(-2).join(' '));
+  await shot(p, '18-gas-game');
+  await p.locator('[data-id="fan1"] .tag').click(); await p.click('#props [data-t="on"]'); await dragTo(p, 'fan1', gx + 20, gy + 110); await p.waitForTimeout(900);
+  assert(!(await ledOn(p, 'led1')), 'fan did not clear the gas: ' + (await p.locator('#serial').innerText()).split('\n').slice(-2).join(' '));
+  await p.click('#btnStop'); await p.close();
+});
+
+await test('8051 Keil C and PIC XC8 projects blink their LEDs', async () => {
+  for (const proj of ['c51', 'pic']) {
+    const p = await page(proj); await p.click('#btnRun'); const seen = new Set();
+    for (let i = 0; i < 25; i++) { seen.add(await ledOn(p, 'led1')); await p.waitForTimeout(100); }
+    assert(seen.has(true) && seen.has(false), proj + ' LED did not blink; errors: ' + (await p.locator('#err').innerText()) + p.errors.join('|'));
+    await shot(p, proj === 'c51' ? '19-8051' : '20-pic'); await p.click('#btnStop'); await p.close();
+  }
+});
+
+await test('Lab assistant (offline) explains a burnt LED and how to wire a part', async () => {
+  const p = await page('burn'); await p.click('#btnAsk'); await p.fill('#aIn', 'why is my circuit not working?'); await p.click('#aForm button');
+  const a1 = await p.locator('.amsg.bot').last().innerText(); assert(/burnt/i.test(a1) && /resistor/i.test(a1), a1);
+  await p.fill('#aIn', 'how do I connect the DHT22?'); await p.click('#aForm button');
+  const a2 = await p.locator('.amsg.bot').last().innerText(); assert(/SDA/.test(a2) && /pin 2/.test(a2), a2);
+  await p.fill('#aIn', 'how do I test the gas sensor?'); await p.click('#aForm button');
+  const a3 = await p.locator('.amsg.bot').last().innerText(); assert(/gas can/i.test(a3) && /fan/i.test(a3), a3);
+  await shot(p, '21-assistant'); await p.close();
 });
 
 await test('Code panel minimizes and restores', async () => {

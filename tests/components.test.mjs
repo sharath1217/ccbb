@@ -22,13 +22,15 @@ test('every part type has a model and pins', () => {
 for (const [type, B] of Object.entries(BOARDS)) {
   test(`${B.name}: power pins give the right voltage and an output pin drives an LED`, () => {
     const pin = B.io.find(p => !(B.inputOnly || []).includes(p) && !/RX|TX/.test(p));
-    const parts = [P('m', type), P('r', 'resistor', { ohms: 220 }), P('l', 'led', { color: 'red' })];
+    const ohms = Math.max(220, Math.ceil((B.vcc - 2) / (B.maxPin / 2) / 10) * 10);   // keep within the chip's recommended pin current
+    const parts = [P('m', type), P('r', 'resistor', { ohms }), P('l', 'led', { color: 'red' })];
     const wires = [W('m:' + pin, 'r:1'), W('r:2', 'l:A'), W('l:C', 'm:' + B.gnd[0])];
+    if (B.external) { parts.push(P('ps', 'battery', { volts: 5, rint: 0 })); wires.push(W('ps:+', 'm:' + B.external.vcc), W('ps:-', 'm:' + B.external.gnd)); }
     const s = run(parts, wires, { mcu: 'm', pins: { [pin]: { mode: 'OUTPUT', v: B.vcc } } });
     for (const [pp, v] of Object.entries(B.power)) near(s.voltAt('m', pp), v, 0.01, pp);
-    const expected = (B.vcc - 2.0) / (220 + 25);       // pin output resistance 25 Ω
+    const expected = (B.vcc - 2.0) / (ohms + 25);       // pin output resistance 25 Ω
     near(s.parts.l.current, expected, expected * 0.12 + 0.0008, 'LED current on ' + pin);
-    assert.equal(s.warnings.length, 0, JSON.stringify(s.warnings));
+    assert.equal(s.warnings.filter(w => w.level !== 'info').length, 0, JSON.stringify(s.warnings));
   });
 }
 test('3.3 V boards warn when 5 V is put on a pin', () => {
@@ -250,12 +252,98 @@ test('every part in the catalog has a model, complete info and a price', async (
     assert.ok(MODELS[c.type], 'model for ' + c.type);
     const d = INFO[c.type]; assert.ok(d, 'info for ' + c.type);
     for (const k of ['outside', 'inside', 'how']) assert.ok(d[k] && d[k].length > 20, `${c.type}.${k}`);
-    assert.ok(d.pins.length && d.specs.length && d.mistakes.filter(Boolean).length, c.type + ' pins/specs/mistakes');
-    assert.ok(Array.isArray(c.price) && c.price[0] > 0 && c.price[1] >= c.price[0], 'price ' + c.type);
+    assert.ok(d.pins.length && d.specs.length && (c.group === 'Real world' || d.mistakes.filter(Boolean).length), c.type + ' pins/specs/mistakes');
+    if (c.group !== 'Real world') assert.ok(Array.isArray(c.price) && c.price[0] > 0 && c.price[1] >= c.price[0], 'price ' + c.type);
   }
 });
 test('oscilloscope inputs are 1 MΩ and do not load the circuit', () => {
   const s = run([bat(9), P('r1', 'resistor', { ohms: 10000 }), P('r2', 'resistor', { ohms: 10000 }), P('o', 'scope')],
     [W('b:+', 'r1:1'), W('r1:2', 'r2:1'), W('r2:2', 'b:-'), W('o:CH1', 'r1:2'), W('o:GND', 'b:-')]);
   near(s.voltAt('o', 'CH1'), 9 * (10000 / 1e6 + 1) / (2 + 10000 / 1e6) - 0 > 0 ? 4.4776 : 0, 0.002, '1 MΩ loading of a 10k/10k divider');
+});
+
+test('8051 / PIC chips without power do nothing and say how to power them', () => {
+  for (const t of ['at89s52', 'pic16f877a', 'atmega328', 'attiny85']) {
+    const B = BOARDS[t], pin = B.io[0];
+    const s = run([P('m', t), P('r', 'resistor', { ohms: 220 }), P('l', 'led')], [W('m:' + pin, 'r:1'), W('r:2', 'l:A'), W('l:C', 'm:' + B.gnd[0])], { mcu: 'm', pins: { [pin]: { mode: 'OUTPUT', v: 5 } } });
+    assert.ok(s.parts.l.current < 1e-6 && s.warnings.some(w => /not powered/.test(w.text)), t);
+  }
+});
+
+// ---------------- real-world environment ----------------
+import { sense, effectiveProps } from '../app/engine/environment.js';
+import { preprocessRegisterC } from '../app/engine/arduino.js';
+const at = (x, y = 0) => ({ x, y });
+test('environment: a lit lighter heats a DHT22 more when closer; the fan cools it back', () => {
+  const s = { type: 'dht22', props: { temp: 27, hum: 55 }, pos: at(0) };
+  const t = d => effectiveProps('dht22', s.props, sense(s, [{ type: 'lighter', mode: 'lit', pos: at(d) }])).temp;
+  assert.ok(t(3) > t(10) && t(10) > t(30) && t(30) > 27, `${t(3)} ${t(10)} ${t(30)}`);
+  near(t(5), 57, 0.5, 'lighter at 5 cm');
+  const withFan = effectiveProps('dht22', s.props, sense(s, [{ type: 'lighter', mode: 'lit', pos: at(5) }, { type: 'fan', on: true, pos: at(0, 10) }])).temp;
+  assert.ok(withFan < t(5) - 10, 'fan should cool: ' + withFan);
+  assert.equal(effectiveProps('dht22', s.props, sense(s, [{ type: 'lighter', mode: 'off', pos: at(2) }])).temp, 27);
+});
+test('environment: gas can raises MQ-2 ppm, the fan clears it; unlit lighter leaks gas', () => {
+  const s = { type: 'gas', props: { ppm: 200 }, pos: at(0) }, ppm = tools => effectiveProps('gas', s.props, sense(s, tools)).ppm;
+  assert.ok(ppm([{ type: 'gascan', on: true, pos: at(5) }]) > 5000);
+  assert.ok(ppm([{ type: 'gascan', on: true, pos: at(5) }, { type: 'fan', on: true, pos: at(0, 5) }]) < 3000);
+  assert.ok(ppm([{ type: 'lighter', mode: 'gas', pos: at(3) }]) > 3000 && ppm([{ type: 'gascan', on: false, pos: at(3) }]) === 200);
+});
+test('environment: flame sensor sees a lit lighter up to ~80 cm, torch barely; hand sets ultrasonic distance and PIR motion', () => {
+  const f = (tools) => effectiveProps('flame', { flame: 0 }, sense({ type: 'flame', props: {}, pos: at(0) }, tools)).flame;
+  assert.ok(f([{ type: 'lighter', mode: 'lit', pos: at(20) }]) > 50 && f([{ type: 'lighter', mode: 'lit', pos: at(90) }]) === 0 && f([{ type: 'torch', on: true, pos: at(5) }]) < 15);
+  const e = sense({ type: 'hcsr04', props: {}, pos: at(0) }, [{ type: 'hand', pos: at(42), moving: true }]);
+  assert.equal(effectiveProps('hcsr04', { dist: 50 }, e).dist, 42); assert.equal(effectiveProps('pir', {}, e).motion, true);
+  assert.equal(effectiveProps('pir', {}, sense({ type: 'pir', props: {}, pos: at(0) }, [{ type: 'hand', pos: at(42), moving: false }])).motion, false);
+});
+test('environment: torch lights an LDR; water wets a rain sensor; magnet triggers hall; card reaches RC522', () => {
+  const o = (type, props, tools) => effectiveProps(type, props, sense({ type, props, pos: at(0) }, tools));
+  assert.ok(o('ldr', { lux: 300 }, [{ type: 'torch', on: true, pos: at(5) }]).lux > 10000);
+  assert.ok(o('rain', { wet: 0 }, [{ type: 'water', pos: at(1) }]).wet > 50 && o('rain', { wet: 0 }, [{ type: 'water', pos: at(10) }]).wet === 0);
+  assert.equal(o('hall', {}, [{ type: 'magnet', pos: at(1) }]).magnet, true);
+  assert.equal(o('rc522', {}, [{ type: 'rfidcard', uid: '12 34 56 78', pos: at(2) }]).card, '12 34 56 78');
+});
+test('new sensors: LM35 gives 10 mV/°C; DS18B20 warns without pull-up; voltage sensor divides by 5; ACS712 reads current', () => {
+  let s = run([bat(5), P('t', 'lm35', { temp: 25 })], [W('b:+', 't:VCC'), W('b:-', 't:GND')]); near(s.voltAt('t', 'OUT'), 0.25, 0.001);
+  s = run([bat(5), P('d', 'ds18b20', {})], [W('b:+', 'd:VCC'), W('b:-', 'd:GND')]); assert.ok(s.warnings.some(w => /pull-up/.test(w.text)));
+  s = run([bat(5), P('d', 'ds18b20', {}), P('r', 'resistor', { ohms: 4700 })], [W('b:+', 'd:VCC'), W('b:-', 'd:GND'), W('r:1', 'd:VCC'), W('r:2', 'd:DQ')]); assert.ok(!s.warnings.some(w => /pull-up/.test(w.text)));
+  s = run([bat(12), P('v', 'voltsensor', {})], [W('b:+', 'v:VIN+'), W('b:-', 'v:VIN-')]); near(s.voltAt('v', 'S'), 12 / 5, 0.01);
+  const parts = [bat(12), P('a', 'acs712', {}), P('l', 'resistor', { ohms: 12 }), P('p', 'battery', { volts: 5, rint: 0 })];
+  s = run(parts, [W('b:+', 'a:IP+'), W('a:IP-', 'l:1'), W('l:2', 'b:-'), W('p:+', 'a:VCC'), W('p:-', 'a:GND'), W('p:-', 'b:-')]);
+  near(s.voltAt('a', 'OUT'), 2.5 + 0.185 * 1, 0.01, 'ACS712 at 1 A');
+});
+test('zener diode holds 5.1 V; relay module switches when IN is LOW', () => {
+  let s = run([bat(12), P('r', 'resistor', { ohms: 1000 }), P('z', 'zener', { vz: 5.1 })], [W('b:+', 'r:1'), W('r:2', 'z:K'), W('z:A', 'b:-')]);
+  near(s.voltAt('z', 'K'), 5.1, 0.12);
+  const parts = [bat(5), P('k', 'relaymod', {}), P('l', 'resistor', { ohms: 1000 })];
+  const w = [W('b:+', 'k:VCC'), W('b:-', 'k:GND'), W('b:+', 'k:COM'), W('k:NO', 'l:1'), W('l:2', 'b:-')];
+  assert.ok(Math.abs(run(parts, w).parts.l.current) < 1e-6, 'off while IN floats high');
+  near(run(parts, [...w, W('k:IN', 'b:-')]).parts.l.current, 0.005, 1e-4, 'on when IN LOW');
+});
+test('8051 Keil C: sbit, port writes, ~ toggles and delay loops translate correctly', async () => {
+  const src = preprocessRegisterC('#include <reg51.h>\nsbit LED = P1^0;\nvoid d(unsigned int ms){ unsigned int i,j; for(i=0;i<ms;i++) for(j=0;j<1275;j++); }\nvoid main(){ P2 = 0x0F; while(1){ LED = 0; d(500); LED = ~LED; d(500); } }', 'c51');
+  const bits = preprocessRegisterC.bits; assert.deepEqual(bits, { LED: 'P1.0' });
+  const regs = {}, log = []; let clock = 0;
+  let r; r = createRunner({ regSet: (k, v) => { regs[k] = v; log.push([k, v, Math.round(clock)]); if (log.length >= 4) r.stop(); }, regGet: k => regs[k] ?? 1, serial() {} }, { now: () => clock, sleep: async ms => { clock += ms; } });
+  await r.run(src);
+  assert.deepEqual(log.slice(0, 3).map(x => x.slice(0, 2)), [['P2', 15], ['LED', 0], ['LED', true]]);
+  near(log[2][2], 500, 15, 'delay_ms(500) timing');
+});
+test('PIC XC8: TRIS, PORTBbits and __delay_ms translate', async () => {
+  const src = preprocessRegisterC('#include <xc.h>\n#define _XTAL_FREQ 4000000\nvoid main(void){ TRISB = 0; while(1){ PORTBbits.RB0 = 1; __delay_ms(250); RB0 = 0; __delay_ms(250); } }', 'xc8');
+  const log = []; let clock = 0;
+  let r; r = createRunner({ regSet: (k, v) => { log.push([k, v, clock]); if (log.length >= 4) r.stop(); }, regGet: () => 0, serial() {} }, { now: () => clock, sleep: async ms => { clock += ms; } });
+  await r.run(src);
+  assert.deepEqual(log.slice(0, 4).map(x => x.slice(0, 2)), [['TRISB', 0], ['RB0', 1], ['RB0', 0], ['RB0', 1]]); assert.equal(log[2][2], 250);
+});
+test('libraries: DallasTemperature, BMP280, BH1750, MFRC522 and NeoPixel talk to the simulator', async () => {
+  let px; const b = board({ ds18b20: () => 24.5, bmp280: () => ({ t: 26, p: 90000 }), bh1750: () => 321, rfid: () => 'DE AD BE EF', neopixel: (pin, c) => { px = [pin, c]; } });
+  await b.r.run(`#include <OneWire.h>\n#include <DallasTemperature.h>\n#include <Adafruit_BMP280.h>\n#include <BH1750.h>\n#include <MFRC522.h>\n#include <Adafruit_NeoPixel.h>
+OneWire ow(4); DallasTemperature ds(&ow); Adafruit_BMP280 bmp; BH1750 lm; MFRC522 rf(10, 9); Adafruit_NeoPixel strip(3, 6, NEO_GRB + NEO_KHZ800);
+void setup(){ Serial.begin(9600); ds.begin(); ds.requestTemperatures(); Serial.println(ds.getTempCByIndex(0));
+  bmp.begin(0x76); Serial.println(bmp.readPressure()); lm.begin(); Serial.println(lm.readLightLevel());
+  SPI.begin(); rf.PCD_Init(); if (rf.PICC_IsNewCardPresent() && rf.PICC_ReadCardSerial()) { Serial.println(rf.uid.uidByte[0], HEX); }
+  strip.begin(); strip.setPixelColor(1, strip.Color(255, 0, 0)); strip.show(); }`, { maxLoops: 0 });
+  assert.equal(b.log.filter(x => x[0] === 's').map(x => x[1]).join(''), '24.50\n90000\n321\n DE\n'.replace(' ', ''));
+  assert.deepEqual(px, ['6', [[0, 0, 0], [255, 0, 0], [0, 0, 0]]]);
 });

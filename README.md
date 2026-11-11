@@ -3,28 +3,29 @@
 Test components before you buy them. Build circuits, simulate, measure and learn.
 
 ## Circuit Studio (working app)
-Open `app/index.html` through a local server (`npm start`, then http://localhost:8000/app/).
+Open `index.html` (home page with lessons) or `app/index.html` through a local server: `npm start`, then http://localhost:8000.
 
-**58 parts, 8 microcontrollers**
-- Boards: Arduino Uno, Nano, Mega 2560, ESP32 DevKit, ESP8266 NodeMCU, Raspberry Pi Pico, Nano RP2040 Connect, STM32 Blue Pill
-- Power: breadboard, battery, bench supply (current limit), 7805 regulator
-- Passive: resistor, potentiometer, slide pot, ceramic + electrolytic capacitors, diode (silicon / Schottky)
-- Transistors & ICs: BC547 NPN, BC557 PNP, IRLZ44N MOSFET, LM358 op-amp, NE555, 74HC00/04/08/32/86
-- Output: LED, RGB LED, bar graph, 7-segment, LCD 16×2 I2C, OLED SSD1306, buzzer, servo, DC motor, relay, L298N
-- Input: push button, slide switch, 4×4 keypad, joystick, DIP switch
-- Sensors: DHT22, NTC, LDR, HC-SR04, PIR, MQ-2, flame, sound, tilt, pulse, MPU6050*, DS1307*, IR receiver* (*wiring + power checks only)
-- Instruments: multimeter (V, A, Ω)
+**17 microcontrollers**
+Arduino Uno, Nano, Mega 2560, Leonardo, Pro Mini · ATmega328P chip, ATtiny85 · ESP32 DevKit, ESP32-C3, ESP32-S3, ESP8266 NodeMCU · Raspberry Pi Pico, Pico W, Nano RP2040 Connect · STM32 Blue Pill · **8051 AT89S52 (Keil C51)** · **PIC16F877A (MPLAB XC8)**
 
-**Simulation**
-- Nodal analysis with Newton–Raphson: Shockley diodes/LEDs, Ebers–Moll BJTs, square-law MOSFETs, op-amps with rail clipping
-- Real-time transient simulation for capacitors and the 555 timer
-- PWM simulated as true switching (duty-weighted average), not a lower voltage
-- Mistake detection: burnt LEDs, shorts, pin overcurrent per chip, 5 V into 3.3 V boards, reversed electrolytics, missing base resistor, motors on pins…
-- Code runner for beginner Arduino C on every board, with DHT, Servo, LiquidCrystal_I2C, Adafruit_SSD1306 and pulseIn
+**73 components**
+- Prototyping & power: breadboard, battery, bench supply (current limit), 7805
+- Passive: resistor, potentiometer, slide pot, ceramic & electrolytic capacitors, diode, zener
+- Transistors & ICs: BC547, BC557, IRLZ44N, LM358, NE555, 74HC00/04/08/32/86
+- Output: LED, RGB LED, bar graph, 7-segment, LCD 16×2 and 20×4 (I2C), OLED, active & passive buzzer, servo, DC motor, relay, relay module, L298N, NeoPixel, NeoPixel ring
+- Input: push button, slide switch, keypad 4×4, joystick, DIP switch
+- Sensors: DHT22, LM35, DS18B20, NTC, BMP280, LDR, BH1750, HC-SR04, PIR, IR obstacle, MQ-2, MQ-135, flame, sound, tilt, vibration, touch, hall, reed, rain, soil moisture, water level, pulse, ACS712, voltage sensor, RC522 RFID, MPU6050*, DS1307*, IR receiver* (*wiring/power checks)
+- Instruments: multimeter, 2-channel oscilloscope
 
-**Studio**: breadboard snap-in, neat right-angle wiring, zoom, part search, 13 starter projects, autosave, file save/open.
+**11 real-world tools (the "game" layer)**: lighter (off / gas / lit), fan, gas can, incense, torch, hand, ice, water, speaker, magnet, RFID card. Drag them near sensors: heat, light, gas, distance, motion, magnetism and moisture change with distance like in real life.
 
-Tests: `npm test` (74 engine/unit + 24 browser tests).
+**Lab assistant**: works offline (reads your circuit, warnings and code). Optionally uses Claude with your own Anthropic API key (default model `claude-opus-5-5`, server-side refusal fallback enabled), called from the browser with the official SDK.
+
+**Simulation**: nodal analysis + Newton–Raphson (diodes, BJTs, MOSFETs, op-amps with rail clipping), real-time transient (capacitors, 555), PWM as duty-weighted switching, mistake detection, Arduino C runner with DHT/Servo/LCD/OLED/OneWire/DallasTemperature/BMP280/BH1750/MFRC522/NeoPixel and pulseIn, plus register-level C for 8051 and PIC.
+
+**Studio**: breadboard snap-in, rotation, neat right-angle wiring, zoom, search, info window for every part (outside / inside / pins / how it works / specs / mistakes / buying), parts list & cost (₹, CSV), undo/redo, 17 starter projects, autosave, offline install (PWA).
+
+Tests: `npm test` (unit/accuracy + browser end-to-end).
 
 ## Earlier prototypes
 - `index.html` + `components.js`: Component Test Lab (32 parts, compare, part finder)
@@ -38,4 +39,5 @@ Open the HTML files through a local server (needed for the 3D pages):
 
 ## Third-party (open source)
 - Three.js (MIT): `vendor/three/`
+- Anthropic TypeScript SDK (MIT), bundled for the browser: `vendor/anthropic-sdk.mjs`
 - Wokwi Elements (MIT): `vendor/wokwi-elements.bundle.js`

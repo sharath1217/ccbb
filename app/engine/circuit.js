@@ -20,17 +20,28 @@ function mcuModel(type) {
   const B = BOARDS[type];
   return {
     pins: boardPinList(type).concat(type === 'pico' ? ['GP25'] : []), ties: [...B.ties, ...B.gnd.slice(1).map(g => [B.gnd[0], g])], ground: B.gnd[0], mcu: true,
+    dyn: !!B.external,
     elements(p, c) {
       const g = B.gnd[0], el = Object.entries(B.power).map(([pin, v]) => Src(pin, g, v, v > 4 ? 0.05 : 0.5, 'pwr:' + pin));
+      let vcc = B.vcc;
+      if (B.external) { const vs = c.v(B.external.vcc) - c.v(B.external.gnd); el.push(R(B.external.vcc, B.external.gnd, 1000, 'core'));
+        if (vs < B.external.min) { for (const pin of B.io) el.push(R(pin, g, 1e8, 'in:' + pin)); return el; } vcc = Math.min(vs, 6); }
       const io = c.io?.mcu === p.id ? c.io.pins : {};
       for (const pin of B.io) { const s = io[pin] || {};
-        if (s.mode === 'OUTPUT' && !(B.inputOnly || []).includes(pin)) el.push(Src(pin, g, s.v ?? 0, 25, 'pin:' + pin));
-        else if (s.mode === 'INPUT_PULLUP') el.push(Src(pin, g, B.vcc, 35000, 'pullup:' + pin));
+        if (s.mode === 'OUTPUT' && !(B.inputOnly || []).includes(pin)) el.push(Src(pin, g, s.v === undefined ? 0 : s.v > 0 ? (s.v / B.vcc) * vcc : 0, 25, 'pin:' + pin));
+        else if (s.mode === 'OPEN') el.push(R(pin, g, 1e8, 'in:' + pin));
+        else if (s.mode === 'WEAK_HIGH') el.push(Src(pin, g, vcc, 10000, 'pullup:' + pin));
+        else if (s.mode === 'INPUT_PULLUP') el.push(Src(pin, g, vcc, 35000, 'pullup:' + pin));
         else if (s.mode === 'INPUT_PULLDOWN') el.push(R(pin, g, 35000, 'pulldown:' + pin));
         else el.push(R(pin, g, 1e8, 'in:' + pin)); }
       return el;
     },
     check(p, c, W) {
+      if (B.external) { const vs = c.v(B.external.vcc) - c.v(B.external.gnd);
+        if (vs < B.external.min) W('warn', `${B.chip} is not powered: connect pin ${B.external.vcc} (VCC) to + and pin ${B.external.gnd} (GND) to −. It needs ${B.external.min}–5.5 V.`);
+        else if (vs > 6) W('bad', `${vs.toFixed(1)} V on ${B.chip} VCC: the maximum is 6 V. This destroys the chip.`);
+        if (B.lang === 'c51' && vs >= B.external.min) W('info', '8051 note: a real AT89S52 also needs an 11.0592 MHz crystal (pins 18–19, 33 pF caps), a reset circuit on pin 9 and EA (pin 31) tied to VCC. The simulator assumes these are fitted.');
+        if (B.lang === 'xc8' && vs >= B.external.min) W('info', 'PIC note: a real PIC16F877A also needs a crystal on OSC1/OSC2 (pins 13–14) and MCLR (pin 1) pulled up to VCC with 10 kΩ. The simulator assumes these are fitted.'); }
       for (const [e, I] of c.els) {
         if (e.tag.startsWith('pwr:') && I > (e.v > 4 ? 0.5 : 0.15)) W('bad', `Too much current from the ${e.tag.slice(4)} pin (${fmt(I, 'A')}). Is something shorted?`);
         if (e.tag.startsWith('pin:')) { const a = Math.abs(I), pin = e.tag.slice(4);
@@ -209,6 +220,43 @@ export const MODELS = {
       return [R('VCC', 'GND', 2000, 'iq'), Src('OUT', 'GND', vs * (0.5 + 0.4 * beat), 1000, 'out')]; } },
   irrecv: { dyn: true, pins: ['GND', 'VCC', 'DAT'], elements: (p, c) => [R('VCC', 'GND', 3000, 'iq'), Src('DAT', 'GND', Math.max(0, supply(c)), 10000, 'out')] },
 
+  // ---------- more sensors ----------
+  lm35: { dyn: true, pins: ['VCC', 'OUT', 'GND'], elements: (p, c) => [R('VCC', 'GND', 80000, 'iq'), Src('OUT', 'GND', supply(c) >= 4 ? Math.max(0, (p.props.temp ?? 27) * 0.01) : 0, 100, 'out')],
+    check(p, c, W) { const vs = supply(c); if (vs > 0.3 && vs < 4) W('warn', `LM35 needs 4–30 V (now ${vs.toFixed(1)} V).`); } },
+  ds18b20: { pins: ['GND', 'DQ', 'VCC'], elements: () => [R('VCC', 'GND', 5000, 'iq'), R('DQ', 'GND', 1e8, 'data')],
+    check(p, c, W) { if (!c.pulledUp('DQ')) W('warn', 'DS18B20 DQ needs a 4.7 kΩ pull-up resistor to VCC, or it reads −127 °C.'); } },
+  bmp280: { pins: ['VCC', 'GND', 'SCL', 'SDA'], elements: () => [R('VCC', 'GND', 2000, 'iq')], check(p, c, W) { const vs = supply(c); if (vs > 3.8) W('warn', `Bare BMP280 is a 3.3 V part (now ${vs.toFixed(1)} V). Most purple modules have a regulator; check yours.`); } },
+  bh1750: { pins: ['VCC', 'GND', 'SCL', 'SDA', 'ADDR'], elements: () => [R('VCC', 'GND', 20000, 'iq')] },
+  mq135: { dyn: true, pins: ['AOUT', 'DOUT', 'GND', 'VCC'], elements(p, c) { const vs = Math.max(0, supply(c)), ppm = p.props.ppm ?? 400;
+    const ao = vs * clamp(0.1 + 0.35 * Math.log10(1 + ppm / 400), 0, 0.95);
+    return [R('VCC', 'GND', 33, 'heater'), Src('AOUT', 'GND', ao, 1000, 'ao'), Src('DOUT', 'GND', ao > vs * (p.props.threshold ?? 40) / 100 ? 0 : vs, 100, 'do')]; } },
+  irobstacle: { dyn: true, pins: ['VCC', 'GND', 'OUT'], elements: (p, c) => [R('VCC', 'GND', 2000, 'iq'), Src('OUT', 'GND', p.props.obstacle ? 0 : Math.max(0, supply(c)), 100, 'out')] },
+  hall: { dyn: true, pins: ['VCC', 'GND', 'OUT'], elements: (p, c) => [R('VCC', 'GND', 2000, 'iq'), Src('OUT', 'GND', p.props.magnet ? 0 : Math.max(0, supply(c)), 100, 'out')] },
+  reed: { pins: ['1', '2'], elements: p => p.props.magnet ? [R('1', '2', 0.1, 'contact')] : [] },
+  touch: { dyn: true, pins: ['VCC', 'GND', 'SIG'], elements: (p, c) => [R('VCC', 'GND', 5000, 'iq'), Src('SIG', 'GND', p.props.touched ? Math.max(0, supply(c)) : 0, 100, 'out')] },
+  vibration: { dyn: true, pins: ['VCC', 'GND', 'DO'], elements: (p, c) => [R('VCC', 'GND', 5000, 'iq'), Src('DO', 'GND', p.props.shaking ? Math.max(0, supply(c)) : 0, 100, 'out')] },
+  rain: { dyn: true, pins: ['VCC', 'GND', 'DO', 'AO'], elements(p, c) { const vs = Math.max(0, supply(c)), w = clamp((p.props.wet ?? 0) / 100, 0, 1), ao = vs * (0.98 - 0.7 * w);
+    return [R('VCC', 'GND', 3000, 'iq'), Src('AO', 'GND', ao, 1000, 'ao'), Src('DO', 'GND', w > 0.3 ? 0 : vs, 100, 'do')]; } },
+  soil: { dyn: true, pins: ['VCC', 'GND', 'AOUT'], elements(p, c) { const vs = Math.max(0, supply(c)), m = clamp((p.props.moisture ?? 20) / 100, 0, 1);   // capacitive v1.2: wetter → lower voltage
+    return [R('VCC', 'GND', 5000, 'iq'), Src('AOUT', 'GND', vs * (0.62 - 0.35 * m), 1000, 'ao')]; } },
+  waterlevel: { dyn: true, pins: ['S', 'VCC', 'GND'], elements(p, c) { const vs = Math.max(0, supply(c)); return [R('VCC', 'GND', 5000, 'iq'), Src('S', 'GND', vs * 0.85 * clamp((p.props.level ?? 0) / 100, 0, 1), 1000, 'ao')]; } },
+  acs712: { dyn: true, pins: ['IP+', 'IP-', 'VCC', 'OUT', 'GND'], elements(p, c) { const vs = Math.max(0, supply(c)), I = p.state.i || 0;
+    return [R('IP+', 'IP-', 0.0012, 'shunt'), R('VCC', 'GND', 500, 'iq'), Src('OUT', 'GND', vs >= 4.5 ? 2.5 + 0.185 * I : 0, 100, 'out')]; },
+    behave(p, c) { p.state.i = Math.round(c.I('shunt') * 1000) / 1000; }, check(p, c, W, out) { out.current = p.state.i || 0; if (Math.abs(p.state.i || 0) > 5) W('bad', 'ACS712-05B is rated ±5 A.'); } },
+  voltsensor: { pins: ['VIN+', 'VIN-', 'S', '+', '-'], ties: [['VIN-', '-']], elements: () => [R('VIN+', 'S', 30000, 'r1'), R('S', 'VIN-', 7500, 'r2')],
+    check(p, c, W) { if (c.v('VIN+') - c.v('VIN-') > 25) W('bad', 'Voltage sensor module input is limited to 25 V.'); } },
+  rc522: { pins: ['SDA', 'SCK', 'MOSI', 'MISO', 'IRQ', 'GND', 'RST', '3.3V'], elements: () => [R('3.3V', 'GND', 250, 'iq')],
+    check(p, c, W) { const vs = supply(c, '3.3V', 'GND'); if (vs > 3.8) W('bad', `RC522 is a 3.3 V module (${vs.toFixed(1)} V on 3.3V pin). 5 V damages it.`); else if (vs < 3) W('warn', 'Power the RC522 from 3.3 V.'); } },
+  zener: { pins: ['A', 'K'], elements: p => [{ type: 'D', a: 'A', c: 'K', ...SILICON, tag: 'fwd' }, { type: 'D', a: 'K', c: '_z', ...SILICON, tag: 'rev' }, Src('_z', 'A', Math.max(0, (p.props.vz ?? 5.1) - 0.62), 2, 'vz')],
+    check(p, c, W, out) { out.voltage = c.v('K') - c.v('A'); const P = Math.abs(c.I('rev')) * Math.abs(out.voltage); if (P > 0.5) W('bad', `Zener dissipating ${fmt(P, 'W')}: above its 0.5 W rating. Add a bigger series resistor.`); } },
+  pbuzzer: { pins: ['1', '2'], elements: () => [R('1', '2', 16, 'coil')], check(p, c, W, out) { out.freq = p.state.freq || 0; out.on = !!p.state.freq; } },
+  neopixel: { pins: ['VDD', 'DOUT', 'VSS', 'DIN'], elements: () => [R('VDD', 'VSS', 5000, 'iq'), R('DIN', 'VSS', 1e7, 'din')], check(p, c, W) { const vs = supply(c, 'VDD', 'VSS'); if (vs > 0.3 && vs < 3.5) W('warn', 'WS2812 needs 3.5–5.3 V.'); } },
+  ring: { pins: ['GND', 'VCC', 'DIN', 'DOUT'], elements: () => [R('VCC', 'GND', 2000, 'iq'), R('DIN', 'GND', 1e7, 'din')],
+    check(p, c, W) { const n = (p.state.colors || []).filter(x => x && (x[0] || x[1] || x[2])).length; if (n > 0 && c.mcuPinsOn(['VCC']).length && n * 0.02 > 0.4) W('warn', `${n} lit pixels draw ~${n * 20} mA at full white. Use an external 5 V supply for many LEDs.`); } },
+  lcd2004: { pins: ['GND', 'VCC', 'SDA', 'SCL'], elements: () => [R('VCC', 'GND', 200, 'backlight'), R('SDA', 'GND', 1e7, 'sda'), R('SCL', 'GND', 1e7, 'scl')] },
+  relaymod: { pins: ['VCC', 'GND', 'IN', 'COM', 'NO', 'NC'], elements: p => [R('VCC', 'GND', p.state.on ? 70 : 5000, 'coil'), R('IN', 'VCC', 10000, 'pull'), R('COM', p.state.on ? 'NO' : 'NC', 0.05, 'k')],
+    behave(p, c) { const vs = supply(c), vin = c.v('IN') - c.v('GND'); p.state.on = vs > 4 && vin < 1.5; },     // most modules: active LOW
+    check(p, c, W, out) { out.on = !!p.state.on; } },
   // ---------- displays & modules on I2C (driven by code libraries) ----------
   lcd: { pins: ['GND', 'VCC', 'SDA', 'SCL'], elements: () => [R('VCC', 'GND', 250, 'backlight'), R('SDA', 'GND', 1e7, 'sda'), R('SCL', 'GND', 1e7, 'scl')],
     check(p, c, W) { const vs = supply(c); if (vs > 0.3 && vs < 4.5) W('warn', `LCD 16×2 needs 5 V (now ${vs.toFixed(1)} V): text will be faint or missing.`); } },
@@ -220,6 +268,7 @@ export const MODELS = {
   scope: { pins: ['CH1', 'CH2', 'GND'], ground: null, elements: () => [R('CH1', 'GND', 1e6, 'ch1'), R('CH2', 'GND', 1e6, 'ch2')] },
   meter: { pins: ['COM', 'V'], elements: p => p.props.mode === 'A' ? [R('V', 'COM', 0.1, 'shunt')] : [R('V', 'COM', 10e6, 'input')] },
   breadboard: { pins: [], ties: [], elements: () => [] },
+  ...Object.fromEntries(['lighter', 'fan', 'gascan', 'torch', 'hand', 'ice', 'water', 'speaker', 'magnet', 'rfidcard', 'incense'].map(t => [t, { pins: [], tool: true, elements: () => [] }])),
 };
 
 // breadboard pins + internal strips
@@ -313,6 +362,7 @@ function simulateOnce(parts, wires, io = {}, opts = {}) {
     const c = mk(p), r = (out.parts[p.id] = {});
     c.els = net.elements.map((e, i) => [e, res.currents[i]]).filter(([e]) => e.part === p.id);
     c.floating = pin => { const k = topo.key(p.id, pin); return !parts.some(q => q.id !== p.id && (MODELS[q.type]?.pins || []).some(pp => topo.dsu.find(topo.key(q.id, pp)) === topo.dsu.find(k))); };
+    c.pulledUp = pin => { const k = topo.key(p.id, pin); return parts.some(q => q.type === 'resistor' && ['1', '2'].some((a, i) => topo.dsu.find(topo.key(q.id, a)) === topo.dsu.find(k) && Math.abs(volt(q.id, ['2', '1'][i]) - c.v('VCC')) < 0.2 && c.v('VCC') > 2)); };
     c.mcuPinsOn = (pins, withBoard) => { const hits = [];
       for (const m2 of mcus) for (const io2 of BOARDS[m2.type].io) for (const pin of pins) if (topo.dsu.find(topo.key(m2.id, io2)) === topo.dsu.find(topo.key(p.id, pin))) hits.push(withBoard ? { pin: io2, vcc: BOARDS[m2.type].vcc } : io2);
       return hits; };
