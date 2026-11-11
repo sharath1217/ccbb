@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Circuit Studio</title>
+<script src="vendor/wokwi-elements.bundle.js"></script>
+<style>
+:root{--bg:#0d1117;--panel:#161b26;--line:#273042;--ink:#e6ebf5;--mut:#8a96ab;--acc:#3fb6ff;--ok:#3ddc84;--warn:#ffb020;--bad:#ff5a5a}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px system-ui,sans-serif;overflow:hidden}
+.top{height:52px;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line);background:var(--panel)}
+.top b{font-size:16px;margin-right:12px}.btn{background:#222c40;color:var(--ink);border:0;border-radius:7px;padding:8px 12px;cursor:pointer;font:inherit;display:inline-flex;gap:6px;align-items:center}
+.btn.p{background:var(--ok);color:#012}.btn.a{background:linear-gradient(90deg,#7c5cff,#3fb6ff);color:#fff}.sp{flex:1}
+.main{display:flex;height:calc(100% - 52px - 30px)}
+.pal{width:230px;background:var(--panel);border-right:1px solid var(--line);overflow:auto;padding:10px}
+.pal input{width:100%;padding:8px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--ink);margin-bottom:8px}
+.pal h4{margin:10px 2px 6px;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.pi{display:flex;align-items:center;gap:8px;padding:6px;border-radius:7px;cursor:grab}.pi:hover{background:#222c40}
+.pi .th{width:42px;height:32px;display:flex;align-items:center;justify-content:center;overflow:hidden}.pi .th>*{transform:scale(.32);transform-origin:center}
+.canvas{flex:1;position:relative;overflow:hidden;background:#0f1420;background-image:radial-gradient(#243049 1px,transparent 1px);background-size:20px 20px}
+.part{position:absolute}.part.sel{outline:2px dashed var(--acc);outline-offset:6px;border-radius:4px}
+.ib{position:absolute;top:-14px;right:-14px;width:24px;height:24px;border-radius:50%;background:var(--acc);color:#012;font:bold 13px Georgia,serif;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 6px #0008}
+.lbl{position:absolute;font-size:11px;color:var(--mut);white-space:nowrap}
+svg.wires{position:absolute;inset:0;pointer-events:none;width:100%;height:100%}
+.env{position:absolute;left:14px;bottom:14px;background:#161b26ee;border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:270px}
+.env b{font-size:12px}.env label{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);margin-top:8px}.env input{width:100%}
+.code{width:470px;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;transition:width .2s}
+.code.min{width:44px}.code.min .ci{display:none}.code .hd{display:flex;align-items:center;gap:8px;padding:10px;border-bottom:1px solid var(--line)}
+.code select{background:#222c40;color:var(--ink);border:0;border-radius:7px;padding:7px;font:inherit}
+.tabs{display:flex;gap:2px;padding:6px 10px 0}.tabs span{padding:6px 12px;border-radius:7px 7px 0 0;background:#1d2433;color:var(--mut);font-size:13px}.tabs span.on{background:#0b0f18;color:var(--ink)}
+.ed{flex:1;background:#0b0f18;margin:0 10px;border-radius:0 7px 7px 7px;overflow:auto;font:12.5px/1.55 ui-monospace,Consolas,monospace;padding:10px 0;counter-reset:l}
+.ed div{padding:0 12px 0 46px;position:relative;white-space:pre}.ed div::before{counter-increment:l;content:counter(l);position:absolute;left:0;width:34px;text-align:right;color:#4a5670}
+.k{color:#ff7ab6}.t{color:#7cc4ff}.s{color:#a5e38c}.c{color:#6b7891;font-style:italic}.n{color:#ffb86b}
+.con{height:170px;margin:10px;background:#05070c;border-radius:7px;font:12px/1.5 ui-monospace,monospace;padding:8px 10px;overflow:auto}
+.con .h{color:var(--mut);display:flex;justify-content:space-between;margin-bottom:4px}
+.ai{margin:0 10px 10px;background:#1d2433;border:1px solid #3a3366;border-radius:9px;padding:10px}
+.ai textarea{width:100%;background:#0b0f18;border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:8px;font:inherit;resize:none}
+.status{height:30px;display:flex;align-items:center;gap:18px;padding:0 14px;border-top:1px solid var(--line);background:var(--panel);font-size:12px;color:var(--mut)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:6px}
+/* info modal */
+.modal{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:9}
+.modal.on{display:flex}.mb{width:1080px;max-width:95vw;height:640px;background:var(--panel);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;overflow:hidden}
+.mh{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line)}.mh h2{margin:0;font-size:19px}
+.mt{display:flex;gap:4px;padding:10px 18px 0}.mt span{padding:8px 14px;border-radius:8px 8px 0 0;color:var(--mut);cursor:pointer}.mt span.on{background:#0f1420;color:var(--ink)}
+.mc{flex:1;background:#0f1420;display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:18px;overflow:auto}
+.stage{background:radial-gradient(circle at 50% 40%,#26324a,#0b0f18);border-radius:12px;display:flex;align-items:center;justify-content:center;position:relative}
+.stage .ctr{position:absolute;bottom:10px;left:0;right:0;text-align:center;color:var(--mut);font-size:12px}
+.callout{position:absolute;font-size:12px;background:#0b0f18e6;border:1px solid var(--acc);color:var(--ink);padding:3px 8px;border-radius:6px}
+.mc h3{margin:0 0 6px;font-size:15px}.mc p{margin:0 0 12px;color:#c5cddb;line-height:1.5}
+table{border-collapse:collapse;width:100%;font-size:13px;margin-bottom:12px}td{padding:6px 8px;border-bottom:1px solid var(--line)}td:first-child{color:var(--mut);width:42%}
+.src{font-size:12px;color:var(--mut)}.src a{color:var(--acc)}.vb{color:var(--ok);font-size:12px;border:1px solid var(--ok);border-radius:99px;padding:2px 8px}
+</style></head><body>
+
+<div class="top">
+  <b>⚡ Circuit Studio</b>
+  <button class="btn">📂 Open</button><button class="btn">💾 Save</button><button class="btn">📋 Parts list & cost</button>
+  <span class="sp"></span>
+  <button class="btn">◻ 2D</button><button class="btn">🧊 3D view</button>
+  <button class="btn p">▶ Run simulation</button>
+</div>
+
+<div class="main">
+  <aside class="pal">
+    <input placeholder="🔍 Search 32 components…">
+    <h4>Microcontrollers</h4>
+    <div class="pi"><div class="th"><wokwi-arduino-uno></wokwi-arduino-uno></div>Arduino Uno</div>
+    <div class="pi"><div class="th"><wokwi-esp32-devkit-v1></wokwi-esp32-devkit-v1></div>ESP32 DevKit</div>
+    <div class="pi"><div class="th"><wokwi-arduino-nano></wokwi-arduino-nano></div>Arduino Nano</div>
+    <h4>Sensors</h4>
+    <div class="pi"><div class="th"><wokwi-dht22></wokwi-dht22></div>DHT22 Temp/Humidity</div>
+    <div class="pi"><div class="th"><wokwi-hc-sr04></wokwi-hc-sr04></div>HC-SR04 Ultrasonic</div>
+    <div class="pi"><div class="th"><wokwi-pir-motion-sensor></wokwi-pir-motion-sensor></div>PIR Motion</div>
+    <div class="pi"><div class="th"><wokwi-gas-sensor></wokwi-gas-sensor></div>MQ-2 Gas</div>
+    <div class="pi"><div class="th"><wokwi-flame-sensor></wokwi-flame-sensor></div>Flame sensor</div>
+    <div class="pi"><div class="th"><wokwi-mpu6050></wokwi-mpu6050></div>MPU6050</div>
+    <h4>Output</h4>
+    <div class="pi"><div class="th"><wokwi-led color="red"></wokwi-led></div>LED</div>
+    <div class="pi"><div class="th"><wokwi-servo></wokwi-servo></div>SG90 Servo</div>
+    <div class="pi"><div class="th"><wokwi-lcd1602></wokwi-lcd1602></div>LCD 16×2</div>
+    <div class="pi"><div class="th"><wokwi-buzzer></wokwi-buzzer></div>Buzzer</div>
+  </aside>
+
+  <section class="canvas" id="cv">
+    <svg class="wires" id="wires"></svg>
+    <div class="part" id="uno" style="left:60px;top:250px"><wokwi-arduino-uno led13></wokwi-arduino-uno></div>
+    <div class="part sel" id="dht" style="left:520px;top:40px"><wokwi-dht22 temperature="31" humidity="48"></wokwi-dht22><span class="ib" data-info>i</span></div>
+    <div class="part" id="led" style="left:690px;top:70px"><wokwi-led color="red" value></wokwi-led><span class="ib">i</span></div>
+    <div class="part" id="res" style="left:640px;top:180px"><wokwi-resistor value="220"></wokwi-resistor></div>
+    <div class="part" id="lcd" style="left:430px;top:440px"><wokwi-lcd1602 pins="i2c" text="Temp: 31.0 C    Hum:  48 %   FAN"></wokwi-lcd1602><span class="ib">i</span></div>
+    <div class="part" id="hc" style="left:90px;top:40px"><wokwi-hc-sr04></wokwi-hc-sr04><span class="ib">i</span></div>
+    <div class="env">
+      <b>🌡️ Environment around DHT22</b>
+      <label>Air temperature <span>31.0 °C</span></label><input type="range" value="62">
+      <label>Humidity <span>48 %</span></label><input type="range" value="48">
+      <label>🔥 Lighter distance <span>off</span></label><input type="range" value="0">
+    </div>
+  </section>
+
+  <aside class="code" id="code">
+    <div class="hd">
+      <button class="btn" title="Minimize code panel" onclick="code.classList.toggle('min')">⇥</button>
+      <div class="ci" style="display:flex;gap:8px;align-items:center;flex:1">
+        <select><option>Arduino Uno (ATmega328P)</option><option>Arduino Nano</option><option>Arduino Mega 2560</option><option>ESP32 DevKit V1</option><option>ESP8266 NodeMCU</option><option>Raspberry Pi Pico (RP2040)</option><option>STM32 Blue Pill</option></select>
+        <span class="sp"></span><button class="btn">⬆ Upload to board</button>
+      </div>
+    </div>
+    <div class="ci tabs"><span class="on">sketch.ino</span><span>diagram.json</span><span>libraries.txt</span></div>
+    <div class="ci ed" id="ed"></div>
+    <div class="ci ai" id="ai">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px"><b>✨ AI code assistant</b><span class="src">reads your circuit: Uno · DHT22 on D2 · LED on D9 · LCD I2C</span></div>
+      <textarea rows="2">Turn on the LED when temperature goes above 30 °C and show temp + humidity on the LCD</textarea>
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn a">✨ Generate code</button><button class="btn">🩺 Fix my error</button><button class="btn">💬 Explain code</button></div>
+    </div>
+    <div class="ci con"><div class="h"><span>Serial Monitor · 9600 baud</span><span>⏸ 🗑</span></div><div id="con"></div></div>
+  </aside>
+</div>
+<div class="status"><span><span class="dot"></span>Simulation running · 1.00× real time</span><span>Compiled: 9,412 bytes (29%) flash · 612 bytes RAM</span><span style="color:var(--ok)">✔ No wiring errors</span><span class="sp"></span><span>Power: 5 V · 58 mA</span></div>
+
+<!-- INFO MODAL -->
+<div class="modal" id="modal"><div class="mb">
+  <div class="mh"><h2>DHT22 / AM2302: Temperature &amp; Humidity Sensor</h2><span class="vb" style="color:#ffb020;border-color:#ffb020">Datasheet values · hardware check pending</span><span class="sp"></span><button class="btn" onclick="modal.classList.remove('on')">✕</button></div>
+  <div class="mt" id="mt"><span data-t="out">Outside</span><span data-t="in">Inside</span><span data-t="pin">Pinout</span><span data-t="work">How it works</span><span data-t="spec">Specs</span><span data-t="buy">Buying guide</span></div>
+  <div class="mc" id="mc"></div>
+</div></div>
+
+<script>
+const H={
+'#include':'k',void:'t',float:'t',int:'t',if:'k',else:'k',return:'k',
+};
+const SRC=`<c>// Auto-generated by AI from your circuit · edit freely</c>
+<k>#include</k> <s>&lt;DHT.h&gt;</s>
+<k>#include</k> <s>&lt;LiquidCrystal_I2C.h&gt;</s>
+
+<k>#define</k> DHTPIN   <n>2</n>      <c>// DHT22 DATA → D2</c>
+<k>#define</k> LEDPIN   <n>9</n>      <c>// LED (+220 Ω) → D9</c>
+<k>#define</k> LIMIT_C  <n>30.0</n>   <c>// fan / alert threshold</c>
+
+DHT dht(DHTPIN, DHT22);
+LiquidCrystal_I2C lcd(<n>0x27</n>, <n>16</n>, <n>2</n>);
+
+<t>void</t> setup() {
+  Serial.begin(<n>9600</n>);
+  pinMode(LEDPIN, OUTPUT);
+  dht.begin();
+  lcd.init(); lcd.backlight();
+}
+
+<t>void</t> loop() {
+  <t>float</t> t = dht.readTemperature();
+  <t>float</t> h = dht.readHumidity();
+  <k>if</k> (isnan(t) || isnan(h)) {      <c>// sensor not ready</c>
+    Serial.println(<s>"DHT read failed"</s>);
+    <k>return</k>;
+  }
+  digitalWrite(LEDPIN, t > LIMIT_C);
+
+  lcd.setCursor(<n>0</n>, <n>0</n>); lcd.print(<s>"Temp: "</s>); lcd.print(t, <n>1</n>); lcd.print(<s>" C"</s>);
+  lcd.setCursor(<n>0</n>, <n>1</n>); lcd.print(<s>"Hum:  "</s>); lcd.print(h, <n>0</n>); lcd.print(<s>" %"</s>);
+  Serial.print(t); Serial.print(<s>" C  "</s>); Serial.println(h);
+  delay(<n>2000</n>);                      <c>// DHT22 max 0.5 Hz</c>
+}`;
+document.getElementById('ed').innerHTML=SRC.split('\n').map(l=>'<div>'+(l.replace(/<(\w)>/g,'<span class=$1>').replace(/<\/\w>/g,'</span>')||' ')+'</div>').join('');
+document.getElementById('con').innerHTML=['30.8 C  47.9','30.9 C  48.0','31.0 C  48.1','<span style="color:#ffb020">LED ON  (t &gt; 30.0)</span>','31.0 C  48.0','31.1 C  48.2'].join('<br>');
+
+// ---- wires ----
+function pin(id,name){const host=document.getElementById(id), el=host.firstElementChild, p=(el.pinInfo||[]).find(p=>p.name===name);
+  if(!p){console.warn('nopin',id,name,(el.pinInfo||[]).map(p=>p.name).join(','));return null}
+  const cv=document.getElementById('cv').getBoundingClientRect(), r=el.getBoundingClientRect();
+  const sx=r.width/(el.offsetWidth||r.width);
+  return [r.left-cv.left+p.x*sx, r.top-cv.top+p.y*sx];}
+function wire(a,b,color,mid){const A=pin(...a),B=pin(...b);if(!A||!B)return'';
+  const my=mid??(A[1]+B[1])/2;
+  return `<path d="M${A[0]},${A[1]} V${my} H${B[0]} V${B[1]}" fill="none" stroke="${color}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" opacity=".95"/><circle cx="${A[0]}" cy="${A[1]}" r="3.5" fill="${color}"/><circle cx="${B[0]}" cy="${B[1]}" r="3.5" fill="${color}"/>`;}
+function drawWires(){ document.getElementById('wires').innerHTML=[
+  wire(['dht','VCC'],['uno','5V'],'#ff4d4d',236),
+  wire(['dht','GND'],['uno','GND.2'],'#555c6b',244),
+  wire(['dht','SDA'],['uno','2'],'#3ddc84',205),
+  wire(['res','1'],['uno','9'],'#ffb020',212),
+  wire(['led','A'],['res','2'],'#ffb020',170),
+  wire(['led','C'],['uno','GND.1'],'#555c6b',160),
+  wire(['lcd','SDA'],['uno','A4'],'#3fb6ff',500),
+  wire(['lcd','SCL'],['uno','A5'],'#b48cff',510),
+  wire(['hc','VCC'],['uno','5V'],'#ff4d4d',190),
+  wire(['hc','TRIG'],['uno','7'],'#ff7ab6',198),
+  wire(['hc','ECHO'],['uno','8'],'#7cc4ff',202),
+].join(''); }
+
+// ---- info modal ----
+const INFO={
+out:`<div class="stage"><div style="transform:scale(3.2)"><wokwi-dht22 temperature="31"></wokwi-dht22></div>
+  <span class="callout" style="top:60px;left:30px">Perforated vent grille: air flows to the sensing element</span>
+  <span class="callout" style="top:220px;right:20px">White ABS housing, 15.1 × 25 × 7.7 mm</span>
+  <span class="callout" style="bottom:70px;left:40px">4 pins, 2.54 mm pitch (breadboard friendly)</span>
+  <div class="ctr">🖱 drag to rotate · scroll to zoom (3D in next version)</div></div>
+  <div><h3>What you see</h3><p>A white plastic cage with a grille on the front. The grille lets room air reach the humidity element while protecting it from touch.
+  Modules (blue/black PCB) add a 10 kΩ pull-up resistor and sometimes a power LED, and expose only 3 pins.</p>
+  <h3>Bare sensor vs module</h3><table><tr><td>Bare AM2302 (4-pin)</td><td>Needs your own 4.7–10 kΩ pull-up on DATA. Pin 3 is not connected.</td></tr><tr><td>Module (3-pin)</td><td>Pull-up already fitted. Pins: + , OUT, −</td></tr><tr><td>Weight</td><td>≈ 2.4 g</td></tr></table>
+  <h3>How to tell DHT22 from DHT11</h3><p>DHT22 is <b>white</b> and taller; DHT11 is <b>blue</b> and smaller. Sellers mix them up, so check the colour when it arrives.</p></div>`,
+in:`<div class="stage"><svg viewBox="0 0 400 420" width="380"><rect x="70" y="20" width="260" height="380" rx="14" fill="#f2f2ee" opacity=".12" stroke="#cfd6e4" stroke-dasharray="6 5"/>
+  <rect x="100" y="60" width="200" height="120" rx="8" fill="#2a6ad8"/><text x="200" y="110" fill="#fff" text-anchor="middle" font-size="14">Capacitive humidity</text><text x="200" y="130" fill="#fff" text-anchor="middle" font-size="14">element (polymer film)</text>
+  <circle cx="150" cy="230" r="22" fill="#222"/><text x="150" y="275" fill="#cfd6e4" text-anchor="middle" font-size="12">NTC / thermistor</text>
+  <rect x="205" y="208" width="70" height="44" rx="4" fill="#111"/><text x="240" y="234" fill="#cfd6e4" text-anchor="middle" font-size="12">8-bit MCU</text><text x="240" y="275" fill="#cfd6e4" text-anchor="middle" font-size="12">ADC + calibration</text>
+  <rect x="100" y="300" width="200" height="22" fill="#2d7a3a"/><text x="200" y="316" fill="#fff" text-anchor="middle" font-size="12">PCB</text>
+  ${[0,1,2,3].map(i=>`<rect x="${128+i*40}" y="322" width="6" height="60" fill="#c9a24a"/>`).join('')}</svg><div class="ctr">Cut-away view (illustration, not to scale)</div></div>
+  <div><h3>What's inside</h3><p><b>1. Capacitive humidity element.</b> Two electrodes with a moisture-absorbing polymer between them. More water vapour → higher capacitance.</p>
+  <p><b>2. Temperature element.</b> A thermistor/IC whose resistance changes with temperature.</p>
+  <p><b>3. Small microcontroller.</b> Measures both, applies the factory calibration stored in its OTP memory, and sends the result as 40 bits over one wire.</p>
+  <p>That's why it is "plug and play": no calibration needed, but you can't make it faster than one reading every 2 s.</p></div>`,
+pin:`<div class="stage"><div style="transform:scale(3)"><wokwi-dht22></wokwi-dht22></div></div>
+  <div><h3>Pinout (front view, grille facing you, left → right)</h3><table><tr><td>1 · VDD</td><td>3.3–6 V power</td></tr><tr><td>2 · DATA</td><td>Single-wire bus → any digital pin, 4.7–10 kΩ pull-up to VDD</td></tr><tr><td>3 · NC</td><td>Not connected</td></tr><tr><td>4 · GND</td><td>Ground</td></tr></table>
+  <h3>Wiring tips</h3><p>Cables over 20 m: use 5 V and a stronger pull-up. Put a 100 nF capacitor between VDD and GND close to the sensor.</p></div>`,
+work:`<div class="stage"><svg viewBox="0 0 420 220" width="400"><text x="10" y="20" fill="#8a96ab" font-size="12">DATA line during one reading</text>
+  <path d="M10 60 H40 V140 H120 V110 H150 V140 H175 V60 H200 V140 H215 V60 H260 V140 H275 V60 H300 V140 H315 V60 H410" fill="none" stroke="#3ddc84" stroke-width="2.5"/>
+  <text x="45" y="165" fill="#cfd6e4" font-size="11">host start ≥1 ms</text><text x="120" y="100" fill="#cfd6e4" font-size="11">reply 80 µs</text><text x="190" y="190" fill="#cfd6e4" font-size="11">bit: 26 µs high = 0, 70 µs high = 1</text><text x="200" y="40" fill="#ffb020" font-size="11">× 40 bits = RH(16) + T(16) + checksum(8)</text></svg></div>
+  <div><h3>One reading, step by step</h3><p>1. Arduino pulls DATA low ≥ 1 ms (“wake up”).<br>2. Sensor answers with 80 µs low + 80 µs high.<br>3. Sensor sends 40 bits. The <b>length</b> of each high pulse is the bit value.<br>4. Last 8 bits are a checksum. If it doesn't match, the library returns <code>NaN</code>.</p>
+  <p>Example: humidity bytes <code>0x02 0x8C</code> = 652 → 65.2 %RH.</p></div>`,
+spec:`<div><h3>Electrical</h3><table><tr><td>Supply</td><td>3.3–6 V DC</td></tr><tr><td>Current</td><td>1–1.5 mA measuring, 40–50 µA standby</td></tr><tr><td>Interface</td><td>Single-bus digital</td></tr><tr><td>Sampling</td><td>0.5 Hz (once per 2 s)</td></tr></table>
+  <h3>Measurement</h3><table><tr><td>Humidity</td><td>0–100 %RH, ±2 %RH (max ±5)</td></tr><tr><td>Temperature</td><td>−40 to 80 °C, ±0.5 °C</td></tr><tr><td>Resolution</td><td>0.1 %RH / 0.1 °C</td></tr><tr><td>Long-term drift</td><td>±0.5 %RH per year</td></tr></table></div>
+  <div><h3>Simulator vs real sensor</h3><p>The simulator uses these datasheet limits: readings outside −40…80 °C return NaN, and reads faster than 2 s return the previous value.</p>
+  <p class="src">Source: Aosong AM2302 datasheet. Each value here should be linked to its datasheet page and checked on real hardware before release.</p></div>`,
+buy:`<div><h3>Should you buy it?</h3><table><tr><td>Good for</td><td>Weather stations, greenhouses, room monitors</td></tr><tr><td>Not for</td><td>Above 80 °C, fast-changing readings, inside liquids (use DS18B20)</td></tr><tr><td>Price (India)</td><td>₹250–350 module</td></tr><tr><td>Alternatives</td><td>DHT11 (cheaper, less accurate) · BME280 (I2C, + pressure) · SHT31 (more accurate)</td></tr></table></div>
+  <div><h3>Common mistakes</h3><p>• Reading every 500 ms → NaN<br>• Using <code>DHT11</code> in code with a DHT22 → wrong values<br>• No pull-up on bare 4-pin sensor<br>• Heat from nearby voltage regulator → reads 2–3 °C high</p></div>`};
+function showInfo(t){document.querySelectorAll('#mt span').forEach(s=>s.classList.toggle('on',s.dataset.t===t));document.getElementById('mc').innerHTML=INFO[t];}
+document.querySelectorAll('#mt span').forEach(s=>s.onclick=()=>showInfo(s.dataset.t));
+document.querySelector('[data-info]').onclick=()=>{modal.classList.add('on');showInfo('out')};
+
+// screenshot hooks
+const q=new URLSearchParams(location.search);
+customElements.whenDefined('wokwi-arduino-uno').then(()=>setTimeout(()=>{drawWires();
+  if(q.get('min')) code.classList.add('min');
+  if(q.get('info')){modal.classList.add('on');showInfo(q.get('info'))}
+  document.body.dataset.ready=1;},300));
+</script></body></html>
