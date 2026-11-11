@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Part Explorer</title>
+<style>
+:root{--bg:#f7f2e8;--ink:#1f2430;--mut:#6b6f7a;--line:#e8dfcf}
+*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);font:15px "Inter",system-ui,sans-serif;color:var(--ink)}
+#c{position:fixed;inset:0}svg#ov{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
+.card{position:fixed;z-index:3;background:#fffdf8;border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 30px #6b5a3a1a;padding:14px 18px 14px 58px;width:250px}
+.card svg{position:absolute;left:16px;top:16px;width:26px;height:26px;stroke:var(--ink);fill:none;stroke-width:1.7}
+.card b{display:block;font-size:14px;letter-spacing:.04em;text-transform:uppercase;margin-bottom:4px}.card span{font-size:13.5px;color:var(--mut);line-height:1.45}
+.hdr{position:fixed;left:24px;top:20px;z-index:3}.hdr h1{margin:0;font-size:22px;letter-spacing:-.02em}.hdr p{margin:2px 0 0;color:var(--mut)}
+.tb{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:3;display:flex;gap:4px;background:#fffdf8;border:1px solid var(--line);border-radius:12px;padding:5px;box-shadow:0 6px 20px #6b5a3a14}
+.tb span{padding:7px 12px;border-radius:8px;font-size:13px;font-weight:600;color:var(--mut)}.tb span.on{background:var(--ink);color:#fff}
+</style>
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js"}}</script></head><body>
+<canvas id="c"></canvas><svg id="ov"></svg><div id="cards"></div>
+<div class="hdr"><h1>Arduino Uno R3</h1><p>Explore the board · hover any part for details</p></div>
+<div class="tb"><span class="on">Outside</span><span>Inside</span><span>Pinout</span><span>Schematic</span><span>Specs</span></div>
+<script type="module">
+import * as THREE from 'three';
+import {RoomEnvironment} from './vendor/three/RoomEnvironment.js';
+const R=new THREE.WebGLRenderer({canvas:c,antialias:true,preserveDrawingBuffer:true});R.setPixelRatio(devicePixelRatio);R.setSize(innerWidth,innerHeight);
+R.shadowMap.enabled=true;R.shadowMap.type=THREE.PCFSoftShadowMap;R.toneMapping=THREE.ACESFilmicToneMapping;R.outputColorSpace=THREE.SRGBColorSpace;
+const S=new THREE.Scene();S.background=new THREE.Color('#f7f2e8');S.environment=new THREE.PMREMGenerator(R).fromScene(new RoomEnvironment(),.04).texture;
+const asp=innerWidth/innerHeight,F=62;const cam=new THREE.OrthographicCamera(-F*asp,F*asp,F,-F,1,2000);
+cam.position.set(-170,210,190);cam.lookAt(0,0,0);cam.zoom=1.35;cam.updateProjectionMatrix();
+S.add(new THREE.HemisphereLight('#fff','#e6dccb',.7));const L=new THREE.DirectionalLight('#fff',1.5);L.position.set(-40,170,-60);L.castShadow=true;L.shadow.mapSize.set(4096,4096);
+Object.assign(L.shadow.camera,{left:-120,right:120,top:120,bottom:-120});L.shadow.radius=8;L.shadow.bias=-.0003;S.add(L);
+// floor with faint grid
+const gc=document.createElement('canvas');gc.width=gc.height=256;const gx=gc.getContext('2d');gx.fillStyle='#f7f2e8';gx.fillRect(0,0,256,256);gx.strokeStyle='#ece3d3';gx.lineWidth=2;gx.strokeRect(0,0,256,256);
+const gt=new THREE.CanvasTexture(gc);gt.wrapS=gt.wrapT=THREE.RepeatWrapping;gt.repeat.set(40,40);gt.colorSpace=THREE.SRGBColorSpace;
+const fl=new THREE.Mesh(new THREE.PlaneGeometry(1600,1600),new THREE.MeshBasicMaterial({map:gt}));fl.material.toneMapped=false;S.add(fl);const sh=new THREE.Mesh(new THREE.PlaneGeometry(1600,1600),new THREE.ShadowMaterial({opacity:.16}));sh.rotation.x=-Math.PI/2;sh.position.y=.05;sh.receiveShadow=true;S.add(sh);fl.rotation.x=-Math.PI/2;fl.receiveShadow=true;S.add(fl);
+
+const M=(c,o={})=>new THREE.MeshStandardMaterial({color:c,roughness:.5,metalness:0,...o});
+const add=(g,m,x,y,z,p=S)=>{const o=new THREE.Mesh(g,m);o.position.set(x,y,z);o.castShadow=o.receiveShadow=true;p.add(o);return o};
+const box=(w,h,d,m,x,y,z,p)=>add(new THREE.BoxGeometry(w,h,d),m,x,y,z,p);
+const cyl=(r,h,m,x,y,z,p,s=32)=>add(new THREE.CylinderGeometry(r,r,h,s),m,x,y,z,p);
+const metal=M('#d5d8de',{metalness:1,roughness:.22}),gold=M('#e0b54a',{metalness:1,roughness:.28}),blk=M('#16171a',{roughness:.45}),tin=M('#bfc3c9',{metalness:.9,roughness:.35});
+const B=new THREE.Group();S.add(B);const W=68.6,D=53.3,T=1.6,Y=6; // board coords: x along length, z along width
+const tex=(w,h,draw)=>{const k=24,cv=document.createElement('canvas');cv.width=w*k;cv.height=h*k;const x=cv.getContext('2d');x.scale(k,k);draw(x);const t=new THREE.CanvasTexture(cv);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=16;return t};
+const P=2.54;
+// --- PCB with silkscreen (texture coords: x 0..W, y 0..D, y=0 is far edge (z=-D/2))
+const silk=tex(W,D,x=>{x.fillStyle='#0b6f8e';x.fillRect(0,0,W,D);
+ // copper traces hint
+ x.strokeStyle='#0d7fa2';x.lineWidth=.35;for(let i=0;i<26;i++){x.beginPath();const a=6+i*2.3;x.moveTo(a,6);x.lineTo(a,14+((i*7)%9));x.lineTo(a+6,22+((i*5)%8));x.stroke()}
+ x.fillStyle='#f4f7f8';x.strokeStyle='#f4f7f8';x.lineWidth=.3;x.textBaseline='middle';x.textAlign='center';
+ const pins=['AREF','GND','13','12','~11','~10','~9','8','','7','~6','~5','4','~3','2','TX→1','RX←0'];
+ x.font='bold 1.25px Arial';let px=18.5;pins.forEach(p=>{if(p){x.save();x.translate(px,6.6);x.rotate(-Math.PI/2);x.fillText(p,0,0);x.restore()}px+=P});
+ x.font='bold 1.8px Arial';x.fillText('DIGITAL (PWM~)',42,10.6);
+ x.font='bold 1.25px Arial';['IOREF','RESET','3.3V','5V','GND','GND','Vin','','A0','A1','A2','A3','A4','A5'].forEach((p,i)=>{if(p){x.save();x.translate(27.9+i*P,46.6);x.rotate(-Math.PI/2);x.fillText(p,0,0);x.restore()}});
+ x.font='bold 1.7px Arial';x.fillText('POWER',35,43);x.fillText('ANALOG IN',58,43);
+ x.font='bold 5px Arial';x.fillText('UNO',58,30);x.font='bold 2.2px Arial';x.fillText('ARDUINO',58,26);
+ x.lineWidth=.45;x.beginPath();x.arc(46,28,2.4,0,7);x.stroke();x.beginPath();x.arc(51,28,2.4,0,7);x.stroke();x.font='bold 2.4px Arial';x.fillText('–',46,28.1);x.fillText('+',51,28.1);
+ x.font='1.2px Arial';x.fillText('MADE IN ITALY',18,50.8);['ON','L','TX','RX'].forEach((t,i)=>x.fillText(t,[52,26,26,26][i]+(i?-3:0),[13.6,16.5,19.5,21.5][i]));
+ x.strokeRect(1.2,1.2,W-2.4,D-2.4);x.font='bold 1.4px Arial';x.fillText('ICSP',63.5,22);x.fillText('RESET',6,4.5);
+});
+const outline=new THREE.Shape();[[0,0],[64.8,0],[66.1,1.3],[66.1,3.8],[68.6,6.3],[68.6,37.1],[66.1,39.6],[66.1,51.9],[64.8,53.3],[0,53.3]].forEach(([a,b],i)=>outline[i?'lineTo':'moveTo'](a-W/2,b-D/2));
+const pg=new THREE.ExtrudeGeometry(outline,{depth:T,bevelEnabled:false});pg.rotateX(Math.PI/2);pg.translate(0,Y+T,0);
+// uv for top
+const uv=pg.attributes.uv,pos=pg.attributes.position;for(let i=0;i<uv.count;i++)uv.setXY(i,(pos.getX(i)+W/2)/W,1-(pos.getZ(i)+D/2)/D);
+const pcb=new THREE.Mesh(pg,[M('#0b6f8e',{map:silk,roughness:.42,metalness:.05}),M('#0a5a73')]);pcb.castShadow=pcb.receiveShadow=true;B.add(pcb);
+const top=Y+T,at=(bx,bz)=>[bx-W/2,bz-D/2]; // helper: board mm (from left, from far edge)
+// mounting holes + standoffs
+[[14,2.5],[15.3,50.8],[66.1,7.6],[66.1,35.5]].forEach(([a,b])=>{const[x,z]=at(a,b);cyl(1.7,.1,M('#c9ccd0',{metalness:.8}),x,top+.05,z,B);cyl(1.1,.12,M('#0a0a0a'),x,top+.08,z,B);cyl(2.2,Y,M('#ece7dc',{roughness:.6}),x,Y/2,z,B,6)});
+// female headers
+function fhdr(n,a,b){const[x,z]=at(a+(n-1)*P/2,b);box(n*P,8.5,P,M('#151515',{roughness:.55}),x,top+4.25,z,B);
+ for(let i=0;i<n;i++){const hx=x+(i-(n-1)/2)*P;box(1,.2,1,M('#000'),hx,top+8.56,z,B);box(.5,.05,.5,gold,hx,top+8.5,z,B)}}
+fhdr(10,17.2,1.3);fhdr(8,44.6,1.3);fhdr(8,27.9,52);fhdr(6,50.8,52);
+// male ICSP headers
+function mhdr(cols,rows,a,b){const[x,z]=at(a,b);box(cols*P,2.5,rows*P,M('#151515'),x,top+1.25,z,B);for(let i=0;i<cols;i++)for(let j=0;j<rows;j++)box(.64,6,.64,gold,x+(i-(cols-1)/2)*P,top+3,z+(j-(rows-1)/2)*P,B)}
+mhdr(2,3,64,27);mhdr(3,2,24,4.6);
+// USB-B
+{const[x,z]=at(-1.5+8,9+6);box(16,10.9,12,metal,x,top+5.45,z,B);box(.3,7,8.5,M('#111'),x-8.05,top+5.6,z,B);box(.32,4,5,M('#e8e8e8'),x-8.05,top+5.6,z,B)}
+// DC barrel jack
+{const[x,z]=at(-2+7,40.5);box(14,11,9,blk,x,top+5.5,z,B);const h=cyl(3.1,.4,M('#000'),x-7.05,top+6.3,z,B);h.rotation.z=Math.PI/2;const p=cyl(1,.5,metal,x-7.1,top+6.3,z,B);p.rotation.z=Math.PI/2}
+// ATmega328P in socket
+{const[x,z]=at(47,39);box(36,1.8,10,M('#1c1c1c'),x,top+.9,z,B);
+ const ct=tex(35,7.4,g=>{g.fillStyle='#1a1b1e';g.fillRect(0,0,35,7.4);g.fillStyle='#9a9ca2';g.font='bold 1.6px Arial';g.fillText('ATMEGA328P-PU',9,3.3);g.font='1.2px Arial';g.fillText('1834   ●',9,5.4);g.beginPath();g.arc(.2,3.7,1,-1.6,1.6);g.fillStyle='#2a2a2e';g.fill()});
+ const ch=box(35,3.6,7.4,[blk,blk,M('#1a1b1e',{map:ct,roughness:.5}),blk,blk,blk],x,top+3.6,z,B);
+ for(let i=0;i<14;i++)[-1,1].forEach(s=>{box(.5,.4,1.4,tin,x+(i-6.5)*P,top+3,z+s*4.3,B);box(.5,3,.3,tin,x+(i-6.5)*P,top+1.6,z+s*4.9,B)})}
+// 16U2 (TQFP-32)
+{const[x,z]=at(25,22);const g=new THREE.Group();g.position.set(x,top,z);g.rotation.y=Math.PI/4;B.add(g);box(5,1,5,blk,0,.5,0,g);for(let i=0;i<8;i++)[[0,1],[0,-1],[1,0],[-1,0]].forEach(([a,b])=>box(a?.9:.25,.2,a?.25:.9,tin,a?a*3:(i-3.5)*.6,.15,b?b*3:(i-3.5)*.6,g))}
+// crystal + resonator
+{const[x,z]=at(29,30);box(11,3.5,4.6,metal,x,top+1.75,z,B);const t=box(9,.05,3,M('#c5c9cf',{metalness:1,roughness:.4}),x,top+3.53,z,B)}
+{const[x,z]=at(53,29);box(3.6,1.4,1.4,M('#c8a050'),x,top+.7,z,B)}
+// regulator SOT-223 + electrolytic caps + diode
+{const[x,z]=at(12,32);box(6.5,1.6,3.5,blk,x,top+.8,z,B);box(3,.2,1.6,tin,x,top+.1,z-2.6,B);for(let i=-1;i<=1;i++)box(.7,.2,1.6,tin,x+i*2.3,top+.1,z+2.6,B)}
+[[10,46],[16,46]].forEach(([a,b])=>{const[x,z]=at(a,b);cyl(3.2,5.4,M('#1d1d1f',{roughness:.3}),x,top+2.7,z,B);cyl(3.15,.1,metal,x,top+5.42,z,B);box(3.4,1,.6,M('#0a0a0a'),x,top+.5,z-3.2,B);
+ const sh=new THREE.Mesh(new THREE.CylinderGeometry(3.22,3.22,5.2,32,1,true,-.5,1),M('#bcbcbc'));sh.position.set(x,top+2.7,z);B.add(sh)});
+{const[x,z]=at(6,26);box(4.5,1.8,2.6,blk,x,top+.9,z,B);box(.6,1.82,2.62,M('#9aa0a8'),x+1.6,top+.9,z,B)}
+// reset button
+{const[x,z]=at(7.5,4);box(6,3.4,6,metal,x,top+1.7,z,B);cyl(1.8,1.4,M('#d62828'),x,top+4,z,B)}
+// SMD scatter: resistors (black with tin ends), caps (tan)
+const rng=(s=>()=>(s=(s*16807)%2147483647)/2147483647)(7);
+[[33,14],[36,14],[39,14],[33,17],[20,30],[20,33],[23,35],[36,22],[40,22],[55,12],[58,12],[60,18],[14,20],[17,15],[45,28],[60,30],[30,34],[33,36],[24,40],[52,22]].forEach(([a,b],i)=>{
+ const[x,z]=at(a,b);const r=i%3?1:0;const g=new THREE.Group();g.position.set(x,top,z);g.rotation.y=(i%2)*Math.PI/2;B.add(g);
+ box(1.6,.5,.8,r?M('#141414'):M('#b8935a'),0,.25,0,g);box(.35,.52,.82,tin,-.72,.26,0,g);box(.35,.52,.82,tin,.72,.26,0,g)});
+// LEDs
+[['#22c55e',51,15.5,1],['#f59e0b',23,16.5,1],['#f59e0b',23,19.5,0],['#f59e0b',23,21.5,0]].forEach(([c,a,b,on])=>{const[x,z]=at(a,b);
+ box(1.6,.6,.8,new THREE.MeshPhysicalMaterial({color:c,emissive:on?c:'#000',emissiveIntensity:on?3:0,roughness:.2,transmission:.3}),x,top+.3,z,B);
+ if(on){const pl=new THREE.PointLight(c,25,12,2);pl.position.set(x,top+2,z);B.add(pl)}});
+
+// ---- callouts ----
+const ICON={
+ pins:'<path d="M5 22V9M10 22V9M15 22V9M20 22V9M3 9h20M3 22h20"/>',chip:'<rect x="7" y="7" width="12" height="12" rx="1.5"/><path d="M10 3v4M16 3v4M10 19v4M16 19v4M3 10h4M3 16h4M19 10h4M19 16h4"/>',
+ usb:'<rect x="4" y="9" width="18" height="8" rx="4"/><path d="M9 13h8"/>',plug:'<path d="M9 3v6M17 3v6M6 9h14v4a7 7 0 0 1-14 0zM13 20v4"/>',
+ bolt:'<path d="M14 3 6 15h6l-1 8 8-12h-6z"/>',led:'<path d="M9 18h8M10 22h6M13 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 13 3z"/>',
+ reset:'<path d="M4 13a9 9 0 1 0 3-6.7L4 9M4 4v5h5"/>',wave:'<path d="M3 13h3l3-7 4 14 4-10 2 3h4"/>'};
+const C=[
+ {k:'pins',t:'Digital pins 0–13',d:'Read buttons, drive LEDs. Pins marked ~ give PWM.',a:at(30,1.3),y:top+9,pos:[0.06,0.17]},
+ {k:'chip',t:'ATmega328P',d:'The brain: 16 MHz, 32 KB flash, 2 KB RAM. Removable.',a:at(47,39),y:top+5.4,pos:[0.73,0.70]},
+ {k:'usb',t:'USB-B port',d:'Uploads your code and powers the board at 5 V.',a:at(4,15),y:top+11,pos:[0.06,0.55]},
+ {k:'plug',t:'DC jack 7–12 V',d:'Battery or adapter input through the regulator.',a:at(3,40.5),y:top+11,pos:[0.10,0.80]},
+ {k:'bolt',t:'Power header',d:'3.3 V (50 mA max), 5 V, GND and Vin for your circuits.',a:at(33,52),y:top+8.6,pos:[0.38,0.84]},
+ {k:'wave',t:'Analog in A0–A5',d:'10-bit ADC: 0–5 V becomes 0–1023.',a:at(57,52),y:top+8.6,pos:[0.73,0.42]},
+ {k:'led',t:'Pin 13 LED "L"',d:'Built-in LED. Your first Blink sketch lights this.',a:at(23,16.5),y:top+.6,pos:[0.40,0.06]},
+ {k:'reset',t:'Reset button',d:'Restarts your sketch from setup().',a:at(7.5,4),y:top+4.7,pos:[0.73,0.10]},
+ {k:'chip',t:'16 MHz crystal',d:'Keeps time for the chip, so delay() is accurate.',a:at(29,30),y:top+3.6,pos:[0,0]}];
+const COLORS=['#ea7a2a','#e2a91f','#3b82f6','#ef4444','#ef4444','#16a34a','#0ea5a4','#8b5cf6','#e2a91f'];
+const scr=c=>{const v=new THREE.Vector3(c.a[0]-2,c.y,c.a[1]+2).project(cam);return[(v.x+1)/2*innerWidth,(1-v.y)/2*innerHeight]};
+C.forEach(c=>c.s=scr(c));const sorted=[...C].sort((a,b)=>a.s[0]-b.s[0]);const half=Math.ceil(C.length/2);
+[sorted.slice(0,half),sorted.slice(half)].forEach((col,side)=>{col.sort((a,b)=>a.s[1]-b.s[1]);const gap=(innerHeight-130)/col.length;col.forEach((c,j)=>{c.L=side?innerWidth-300:40;c.T=95+j*gap})});
+cards.innerHTML=C.map((c,i)=>`<div class="card" id="cd${i}" style="left:${c.L}px;top:${c.T}px"><svg viewBox="0 0 26 26">${ICON[c.k]}</svg><b>${c.t}</b><span>${c.d}</span></div>`).join('');
+function lines(){ov.innerHTML=C.map((c,i)=>{const v=new THREE.Vector3(c.a[0],c.y,c.a[1]).project(cam);const px=(v.x+1)/2*innerWidth,py=(1-v.y)/2*innerHeight;
+ const r=document.getElementById('cd'+i).getBoundingClientRect();const ex=px<r.left?r.left:px>r.right?r.right:r.left+r.width/2,ey=py<r.top?r.top:py>r.bottom?r.bottom:r.top+r.height/2;
+ const cx=(ex===r.left||ex===r.right)?ex:ex, cy=(ey===r.top||ey===r.bottom)?ey:ey;
+ return `<path d="M${px} ${py} L${(px+cx)/2} ${cy} L${cx} ${cy}" stroke="${COLORS[i]}" stroke-width="1.6" stroke-dasharray="4 4" fill="none"/><circle cx="${px}" cy="${py}" r="5" fill="${COLORS[i]}" stroke="#fff" stroke-width="2"/><circle cx="${cx}" cy="${cy}" r="3.5" fill="${COLORS[i]}"/>`}).join('')}
+
+R.render(S,cam);
+let n=0;(function f(){R.render(S,cam);lines();if(++n===8)document.body.dataset.ready=1;requestAnimationFrame(f)})();
+</script></body></html>

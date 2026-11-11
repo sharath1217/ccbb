@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CircuitBench 3D</title>
+<style>
+:root{--bg:#f6f4ef;--card:#ffffffd9;--ink:#1d2433;--mut:#6b7385;--line:#e4e0d6;--acc:#4f46e5;--acc2:#0ea5a4;--ok:#16a34a;--warn:#d97706;--bad:#dc2626}
+*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font:14px "Inter",system-ui,sans-serif}
+#c{position:fixed;inset:0}
+.top{position:fixed;top:14px;left:14px;right:14px;height:56px;display:flex;align-items:center;gap:10px;padding:0 10px 0 16px;background:var(--card);backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 30px #1d243312;z-index:3}
+.logo{font-weight:800;font-size:17px;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}.logo i{width:26px;height:26px;border-radius:8px;background:conic-gradient(from 200deg,#4f46e5,#0ea5a4,#f59e0b,#4f46e5);display:inline-block}
+.seg{display:flex;background:#efece4;border-radius:11px;padding:3px;margin-left:16px}.seg span{padding:7px 14px;border-radius:9px;color:var(--mut);font-weight:600;font-size:13px}.seg span.on{background:#fff;color:var(--ink);box-shadow:0 1px 4px #0001}
+.sp{flex:1}.btn{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 13px;font:600 13px inherit;color:var(--ink);display:inline-flex;gap:6px;align-items:center}
+.btn.p{background:var(--ink);color:#fff;border-color:var(--ink)}.btn.g{background:linear-gradient(90deg,#4f46e5,#0ea5a4);color:#fff;border:0}
+.rail{position:fixed;left:14px;top:84px;bottom:14px;width:236px;background:var(--card);backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:16px;padding:12px;z-index:3;overflow:hidden}
+.rail input{width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 11px;background:#fff;font:inherit}
+.rail h5{margin:14px 4px 6px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
+.chip{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:10px;font-weight:500}.chip:hover,.chip.on{background:#efece4}
+.chip b{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;background:#fff;border:1px solid var(--line)}
+.panel{position:fixed;background:var(--card);backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 30px #1d243314;z-index:3;padding:14px}
+.panel h4{margin:0 0 8px;font-size:13px}.mut{color:var(--mut);font-size:12px}
+.code{right:14px;top:84px;width:400px;bottom:14px;display:flex;flex-direction:column;padding:0;overflow:hidden}
+.code .hd{display:flex;gap:8px;align-items:center;padding:12px;border-bottom:1px solid var(--line)}
+.code select{border:1px solid var(--line);border-radius:10px;padding:8px;font:600 13px inherit;background:#fff;flex:1}
+.ed{flex:1;background:#fbfaf7;font:12.5px/1.6 ui-monospace,Menlo,Consolas,monospace;padding:10px 0;overflow:hidden;counter-reset:l}
+.ed div{white-space:pre;padding-left:44px;position:relative}.ed div::before{counter-increment:l;content:counter(l);position:absolute;left:0;width:32px;text-align:right;color:#b7b2a5}
+.k{color:#7c3aed}.t{color:#0e7490}.s{color:#15803d}.c{color:#9a9384;font-style:italic}.n{color:#c2410c}
+.ai{margin:12px;border-radius:12px;padding:12px;background:linear-gradient(135deg,#eef2ff,#ecfeff);border:1px solid #c7d2fe}
+.ai .q{background:#fff;border-radius:9px;padding:9px;border:1px solid var(--line);margin:8px 0;font-size:13px}
+.serial{margin:0 12px 12px;background:#1d2433;color:#d7f7e3;border-radius:12px;padding:10px 12px;font:12px/1.6 ui-monospace,monospace;height:120px}
+.env{left:264px;bottom:14px;width:300px}
+.env label{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);margin-top:10px}
+.bar{height:6px;border-radius:9px;background:#e9e5db;margin-top:6px;position:relative}.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:9px;background:linear-gradient(90deg,var(--acc2),var(--acc))}
+.bar i::after{content:"";position:absolute;right:-7px;top:-5px;width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid var(--acc);box-shadow:0 1px 4px #0002}
+.view{left:50%;transform:translateX(-50%);bottom:14px;display:flex;gap:6px;padding:6px}
+.view span{padding:7px 12px;border-radius:9px;font-weight:600;font-size:12px;color:var(--mut)}.view span.on{background:var(--ink);color:#fff}
+#labels{position:fixed;inset:0;pointer-events:none;z-index:2}
+.lab{position:absolute;transform:translate(-50%,-100%);background:#fff;border:1px solid var(--line);border-radius:10px;padding:5px 9px;font-size:12px;font-weight:600;white-space:nowrap;box-shadow:0 4px 14px #1d24331a}
+.lab small{display:block;font-weight:500;color:var(--mut)}.lab.hot{border-color:var(--acc);color:var(--acc)}
+.lab .i{display:inline-flex;width:17px;height:17px;border-radius:50%;background:var(--acc);color:#fff;font:700 11px Georgia;align-items:center;justify-content:center;margin-left:6px}
+.scope{background:#0f172a;border-radius:10px;height:150px;margin-top:8px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px;margin-top:8px}.kv span:nth-child(odd){color:var(--mut)}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px;background:#dcfce7;color:#166534}
+.pill.w{background:#fef3c7;color:#92400e}
+</style>
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js"}}</script>
+</head><body>
+<canvas id="c"></canvas><div id="labels"></div>
+
+<div class="top">
+  <div class="logo"><i></i>CircuitBench</div>
+  <div class="seg" id="mode"><span data-m="mcu">Microcontroller</span><span data-m="analog">Analog &amp; Logic</span><span data-m="explore">Explore a part</span><span data-m="meter">Instruments</span></div>
+  <span class="sp"></span>
+  <button class="btn">⟲ Undo</button><button class="btn">🧾 Parts &amp; cost</button><button class="btn">◻ 2D</button><button class="btn" style="border-color:var(--acc);color:var(--acc)">◆ 3D</button>
+  <button class="btn p">▶ Simulate</button>
+</div>
+
+<div class="rail">
+  <input placeholder="Search parts, ICs, modules…">
+  <h5>Boards</h5>
+  <div class="chip"><b>🟦</b>Arduino Uno</div><div class="chip"><b>⬛</b>ESP32 DevKit</div>
+  <h5>Passive</h5>
+  <div class="chip"><b>〰</b>Resistor</div><div class="chip"><b>▮</b>Capacitor</div><div class="chip"><b>🎛</b>Potentiometer</div>
+  <h5>ICs &amp; Logic</h5>
+  <div class="chip on"><b>▣</b>LM358 Op-amp</div><div class="chip"><b>&amp;</b>74HC08 AND gate</div><div class="chip"><b>⏱</b>NE555 Timer</div>
+  <h5>Sensors</h5>
+  <div class="chip"><b>🌡</b>DHT22</div><div class="chip"><b>📡</b>HC-SR04</div>
+  <h5>Instruments</h5>
+  <div class="chip"><b>📈</b>Oscilloscope</div><div class="chip"><b>🔋</b>Power supply</div><div class="chip"><b>Ω</b>Multimeter</div>
+</div>
+<div id="ui"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from './vendor/three/OrbitControls.js';
+import {RoomEnvironment} from './vendor/three/RoomEnvironment.js';
+const view=new URLSearchParams(location.search).get('view')||'mcu';
+document.querySelectorAll('#mode span').forEach(s=>s.classList.toggle('on',s.dataset.m===view));
+
+const R=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true,preserveDrawingBuffer:true});
+R.setPixelRatio(devicePixelRatio);R.setSize(innerWidth,innerHeight);R.shadowMap.enabled=true;R.shadowMap.type=THREE.PCFSoftShadowMap;
+R.toneMapping=THREE.ACESFilmicToneMapping;R.toneMappingExposure=1.05;R.outputColorSpace=THREE.SRGBColorSpace;
+const S=new THREE.Scene();S.background=new THREE.Color('#f6f4ef');
+S.environment=new THREE.PMREMGenerator(R).fromScene(new RoomEnvironment(),.04).texture;
+const cam=new THREE.PerspectiveCamera(30,innerWidth/innerHeight,1,5000);
+const ctl=new OrbitControls(cam,R.domElement);ctl.enableDamping=true;
+S.add(new THREE.HemisphereLight('#ffffff','#d8d2c4',.6));
+const sun=new THREE.DirectionalLight('#fff',1.6);sun.position.set(-120,260,160);sun.castShadow=true;sun.shadow.mapSize.set(4096,4096);
+Object.assign(sun.shadow.camera,{left:-300,right:300,top:300,bottom:-300,far:800});sun.shadow.radius=6;sun.shadow.bias=-.0004;S.add(sun);
+
+// ---------- materials ----------
+const M=(c,o={})=>new THREE.MeshStandardMaterial({color:c,roughness:.55,metalness:0,...o});
+const mat={desk:M('#ebe6dc',{roughness:.9}),bb:M('#f4f3ee',{roughness:.7}),hole:M('#3a3a3a'),pcb:M('#0f6e9c',{roughness:.45}),
+ pcbG:M('#1f6b3a',{roughness:.45}),blk:M('#1b1b1d',{roughness:.4}),hdr:M('#121214',{roughness:.6}),metal:M('#c9ccd2',{metalness:1,roughness:.25}),
+ gold:M('#d4a843',{metalness:1,roughness:.3}),white:M('#f7f7f4',{roughness:.5}),mesh:M('#9aa0a8',{metalness:.8,roughness:.5}),
+ res:M('#d9c49b',{roughness:.5}),red:M('#e11d48'),blue:M('#2563eb')};
+const add=(g,m,x=0,y=0,z=0,p=S)=>{const o=new THREE.Mesh(g,m);o.position.set(x,y,z);o.castShadow=o.receiveShadow=true;p.add(o);return o};
+const box=(w,h,d,m,x,y,z,p)=>add(new THREE.BoxGeometry(w,h,d),m,x,y,z,p);
+const cyl=(r,h,m,x,y,z,p,seg=32)=>add(new THREE.CylinderGeometry(r,r,h,seg),m,x,y,z,p);
+const rbox=(w,h,d,r,m,x,y,z,p)=>{const s=new THREE.Shape();s.moveTo(-w/2+r,-d/2);s.lineTo(w/2-r,-d/2);s.quadraticCurveTo(w/2,-d/2,w/2,-d/2+r);s.lineTo(w/2,d/2-r);s.quadraticCurveTo(w/2,d/2,w/2-r,d/2);s.lineTo(-w/2+r,d/2);s.quadraticCurveTo(-w/2,d/2,-w/2,d/2-r);s.lineTo(-w/2,-d/2+r);s.quadraticCurveTo(-w/2,-d/2,-w/2+r,-d/2);
+ const g=new THREE.ExtrudeGeometry(s,{depth:h,bevelEnabled:true,bevelSize:.4,bevelThickness:.4,bevelSegments:3});g.rotateX(-Math.PI/2);g.translate(0,-h/2,0);return add(g,m,x,y,z,p)};
+const grp=(x=0,y=0,z=0,p=S)=>{const g=new THREE.Group();g.position.set(x,y,z);p.add(g);return g};
+
+// desk
+const desk=box(2000,4,2000,mat.desk,0,-2,0);
+// subtle cutting-mat grid
+const gridT=(()=>{const c=document.createElement('canvas');c.width=c.height=512;const x=c.getContext('2d');x.fillStyle='#e9e4d8';x.fillRect(0,0,512,512);x.strokeStyle='#ddd6c7';x.lineWidth=2;for(let i=0;i<=512;i+=32){x.beginPath();x.moveTo(i,0);x.lineTo(i,512);x.stroke();x.beginPath();x.moveTo(0,i);x.lineTo(512,i);x.stroke()}
+ const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(16,16);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;return t})();
+desk.material=new THREE.MeshStandardMaterial({map:gridT,roughness:.95});
+
+// ---------- part builders ----------
+const P=2.54;
+function breadboard(x,z,cols=63){const g=grp(x,0,z);const W=cols*P+8,D=56;
+ rbox(W,9,D,2,mat.bb,0,4.5,0,g);
+ box(W-4,.6,2.2,M('#e7e5de'),0,9.05,0,g); // center channel
+ const hg=new THREE.BoxGeometry(1.1,.4,1.1);const pos=[];
+ for(let c=0;c<cols;c++){const hx=(c-(cols-1)/2)*P;for(let r=0;r<5;r++){pos.push([hx,(r+1.2)*P]);pos.push([hx,-(r+1.2)*P])}}
+ for(let c=0;c<cols;c++){if(c%6===5)continue;const hx=(c-(cols-1)/2)*P;[22.5,25,-22.5,-25].forEach(z=>pos.push([hx,z]))}
+ const im=new THREE.InstancedMesh(hg,mat.hole,pos.length);const m4=new THREE.Matrix4();pos.forEach(([a,b],i)=>{m4.makeTranslation(a,9.05,b);im.setMatrixAt(i,m4)});g.add(im);
+ [[-23.8,'#dc2626'],[-20.9,'#2563eb'],[20.9,'#dc2626'],[23.8,'#2563eb']].forEach(([zz,c])=>box(W-10,.15,.5,M(c),0,9.1,zz+(zz<0?-1.3:1.3)*0,g));
+ return g}
+const bbPos=(g,c,r)=>{const cols=63;return new THREE.Vector3(g.position.x+(c-(cols-1)/2)*P,9.2,g.position.z+r)}; // r in mm from center
+
+function arduinoUno(x,z,rot=0){const g=grp(x,0,z);g.rotation.y=rot;
+ box(68.6,1.6,53.3,mat.pcb,0,6.8,0,g);
+ [[-30,-22],[ 30,-22],[30,22],[-28,22]].forEach(([a,b])=>{cyl(2.4,10,M('#e8e8e8',{metalness:.6,roughness:.3}),a,3,b,g)});
+ box(16,11,12,mat.metal,-31,13.1,-12,g); // USB B
+ box(13,11,9,mat.blk,-33,13.1,14,g); // barrel jack
+ cyl(3,9,mat.blk,-38.5,13.1,14,g).rotation.z=Math.PI/2;
+ box(35.5,4,8,mat.blk,10,9.6,12,g); // ATmega328P
+ for(let i=0;i<14;i++){box(.6,3,1.2,mat.metal,10+(i-6.5)*P,8.4,7.6,g);box(.6,3,1.2,mat.metal,10+(i-6.5)*P,8.4,16.4,g)}
+ cyl(4,2,mat.blk,-12,8.6,10,g).rotation.x=0;
+ box(11,3.5,4.5,mat.metal,-12,9.4,-4,g); // crystal
+ box(6,5,6,mat.blk,-27,10,-25,g);box(2.5,1.5,2.5,M('#ff4d4d'),-27,12.8,-25,g); // reset
+ // headers
+ const hdr=(n,hx,hz)=>{box(n*P,8.5,P,mat.hdr,hx,11.8,hz,g);for(let i=0;i<n;i++)box(.9,.3,.9,M('#5b5b5b'),hx+(i-(n-1)/2)*P,16.1,hz,g)};
+ hdr(10,-2,-24.6);hdr(8,24,-24.6);hdr(8,2,24.6);hdr(6,24,24.6);
+ box(10,4,10,mat.blk,26,9.6,-5,g); // 16U2
+ box(3,1,1.6,M('#22c55e',{emissive:'#22c55e',emissiveIntensity:2}),17,8.1,-10,g); // ON led
+ box(3,1,1.6,M('#f59e0b',{emissive:'#f59e0b',emissiveIntensity:2}),-6,8.1,-15,g); // L led
+ // silkscreen label
+ const lab=textPlane('UNO','#ffffff',18,8);lab.position.set(22,7.65,6);g.add(lab);
+ return g}
+function textPlane(t,color,w,h,bg){const c=document.createElement('canvas');c.width=256;c.height=Math.round(256*h/w);const x=c.getContext('2d');if(bg){x.fillStyle=bg;x.fillRect(0,0,c.width,c.height)}
+ x.fillStyle=color;x.font=`bold ${c.height*.7}px Arial`;x.textAlign='center';x.textBaseline='middle';x.fillText(t,c.width/2,c.height/2);
+ const tx=new THREE.CanvasTexture(c);tx.colorSpace=THREE.SRGBColorSpace;tx.anisotropy=8;
+ const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:tx,transparent:true}));m.rotation.x=-Math.PI/2;return m}
+function resistor(a,b,bands){const g=grp();const mid=a.clone().add(b).multiplyScalar(.5);const len=a.distanceTo(b);const ang=Math.atan2(b.z-a.z,b.x-a.x);
+ g.position.copy(mid);g.rotation.y=-ang;const H=4.5;
+ const body=add(new THREE.CapsuleGeometry(1.25,4.2,8,24),mat.res,0,H,0,g);body.rotation.z=Math.PI/2;
+ bands.forEach((c,i)=>{const bnd=cyl(1.33,.55,M(c,{roughness:.4}),-1.8+i*1.15,H,0,g);bnd.rotation.z=Math.PI/2});
+ const lead=new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(-len/2,-4,0),new THREE.Vector3(-len/2,H-.4,0),new THREE.Vector3(-len/2+1,H,0),new THREE.Vector3(len/2-1,H,0),new THREE.Vector3(len/2,H-.4,0),new THREE.Vector3(len/2,-4,0)],false,'catmullrom',.05),64,.28,8);
+ add(lead,mat.metal,0,0,0,g);return g}
+function led(p1,color,on){const g=grp(p1.x+P/2,p1.y,p1.z);const lm=new THREE.MeshPhysicalMaterial({color,transmission:.55,roughness:.15,thickness:3,emissive:on?color:'#000',emissiveIntensity:on?2.2:0});
+ cyl(2.5,5.2,lm,0,9,0,g);add(new THREE.SphereGeometry(2.5,32,16,0,Math.PI*2,0,Math.PI/2),lm,0,11.6,0,g);cyl(2.9,1,lm,0,6.5,0,g);
+ cyl(.25,9,mat.metal,-P/2,2,0,g,8);cyl(.25,8,mat.metal,P/2,2.5,0,g,8);
+ if(on){const L=new THREE.PointLight(color,900,90,2);L.position.set(0,14,0);g.add(L)}return g}
+function dht22(x,z){const g=grp(x,0,z);const b=rbox(15.1,7.7,25,1,mat.white,0,0,0,g);b.rotation.x=Math.PI/2;b.position.set(0,22,0);
+ for(let r=0;r<7;r++)for(let c=0;c<3;c++)box(2.6,1.4,1.2,M('#2b2b2b'),-3.3+c*3.3,14+r*2.5,3.6,g);
+ for(let r=0;r<7;r++){box(3.5,1.4,1.2,M('#2b2b2b'),-6,14+r*2.5,3.6,g);box(3.5,1.4,1.2,M('#2b2b2b'),6,14+r*2.5,3.6,g)}
+ cyl(2.5,1.2,M('#2b2b2b'),0,32.2,3.6,g).rotation.x=Math.PI/2;
+ for(let i=0;i<4;i++)box(.6,12,.4,mat.metal,(i-1.5)*P,4,0,g);return g}
+function hcsr04(x,z){const g=grp(x,0,z);box(45,20,1.6,mat.pcb,0,18,0,g);
+ [-13,13].forEach(px=>{const c=cyl(8,12,mat.metal,px,18,6.8,g,48);c.rotation.x=Math.PI/2;const m=cyl(7,.4,M('#3d4148',{roughness:.9}),px,18,12.9,g,48);m.rotation.x=Math.PI/2});
+ box(5,3,4,mat.metal,0,24,2,g);for(let i=0;i<4;i++)box(.6,12,.6,mat.metal,(i-1.5)*P,4,0,g);
+ const t=textPlane('HC-SR04','#fff',18,4);t.rotation.set(0,0,0);t.position.set(0,26,-.85);t.rotation.y=Math.PI;g.add(t);return g}
+function dip(n,cx,y,cz,label){const g=grp(cx,y,cz);const w=n/2*P;box(w,3.4,6.4,mat.blk,0,4.4+y*0,0,g);
+ const notch=cyl(.9,.3,M('#333'),-w/2+1.4,6.15,0,g);
+ for(let i=0;i<n/2;i++){const lx=(i-(n/2-1)/2)*P;[-1,1].forEach(s=>{box(.5,.5,1.4,mat.metal,lx,4.6,s*3.7,g);box(.5,6,.3,mat.metal,lx,1.6,s*4.1,g)})}
+ if(label){const t=textPlane(label,'#cfcfcf',10,3);t.position.set(.4,6.16,0);g.add(t)}return g}
+function ecap(p,h=11,r=3){const g=grp(p.x+P/2,0,p.z);cyl(r,h,M('#1e3a8a',{roughness:.35}),0,9+h/2+1,0,g);cyl(r*.98,.3,mat.metal,0,9+h+1.1,0,g);box(1,h,.2,M('#cbd5e1'),r-.3,9+h/2+1,0,g);return g}
+function trimpot(p){const g=grp(p.x,0,p.z);box(9.5,5,9.5,M('#2f55d4'),0,13,0,g);const k=cyl(3,1.6,M('#f2f2f2'),0,16.2,0,g);box(4,.4,.8,M('#888'),0,17.1,0,g);return g}
+function wire(pts,color,lift=14){const v=pts.map(p=>p.clone());const a=v[0],b=v[v.length-1];
+ const ctrl=[a.clone(),a.clone().add(new THREE.Vector3(0,lift*.7,0)),...v.slice(1,-1).map(p=>p.clone().setY(p.y+lift)),
+  a.clone().lerp(b,.5).setY(Math.max(a.y,b.y)+lift),b.clone().add(new THREE.Vector3(0,lift*.7,0)),b.clone()];
+ if(v.length>2)ctrl.splice(ctrl.length-4,1);
+ const curve=new THREE.CatmullRomCurve3(ctrl,false,'centripetal');add(new THREE.TubeGeometry(curve,120,.75,10),M(color,{roughness:.45}));
+ [a,b].forEach(p=>{cyl(.9,3.2,M('#2a2a2a'),p.x,p.y+1.5,p.z,S,12)})}
+const V=(x,y,z)=>new THREE.Vector3(x,y,z);
+
+// ---------- scenes ----------
+const labels=[];const L=(t,sub,v,hot,info)=>labels.push({t,sub,v,hot,info});
+const UI=document.getElementById('ui');
+
+if(view==='mcu'){
+ const bb=breadboard(30,0);const uno=arduinoUno(-110,6);
+ const d=dht22(bbPos(bb,8,0).x+P*1.5,bbPos(bb,8,-6).z-2);
+ const sr=hcsr04(bbPos(bb,40,0).x+P*1.5,-9);
+ const ledP=bbPos(bb,24,-6.4);led(ledP,'#ff2a2a',true);
+ resistor(bbPos(bb,25,-6.4+0),bbPos(bb,30,-6.4),['#c00000','#c00000','#6b3a1e','#c9a24a']);
+ wire([V(-131,16,-18.6),bbPos(bb,6,-24)],'#e11d48',22);
+ wire([V(-118,16,-18.6),bbPos(bb,7,-21.5)],'#1f2937',26);
+ wire([V(-80,16,-30.6),bbPos(bb,9,-14)],'#16a34a',30);
+ wire([V(-87,16,-30.6),bbPos(bb,30,-14)],'#f59e0b',40);
+ wire([bbPos(bb,23,-14),bbPos(bb,23,-21.5)],'#1f2937',6);
+ wire([V(-95,16,-30.6),bbPos(bb,40,-14)],'#a855f7',46);
+ wire([V(-92,16,-30.6),bbPos(bb,41,-14)],'#0ea5a4',52);
+ cam.position.set(-20,300,330);ctl.target.set(-25,10,0);
+ L('Arduino Uno R3','ATmega328P · 16 MHz',V(-110,30,6),false,true);
+ L('DHT22','31.0 °C · 48 %RH',V(d.position.x,40,d.position.z),true,true);
+ L('LED (red) · ON','D9 → 220 Ω · 13.6 mA',V(ledP.x,24,ledP.z),false,true);
+ L('HC-SR04','50.2 cm',V(sr.position.x,34,sr.position.z),false,true);
+ UI.innerHTML=`
+ <div class="panel code"><div class="hd"><button class="btn">⇥</button><select><option>Arduino Uno (ATmega328P)</option></select><button class="btn">⬆ Upload</button></div>
+ <div class="ed">${code(`<c>// AI-generated from your circuit</c>
+<k>#include</k> <s>&lt;DHT.h&gt;</s>
+DHT dht(<n>2</n>, DHT22);
+<k>const</k> <t>int</t> LED = <n>9</n>, TRIG = <n>7</n>, ECHO = <n>8</n>;
+
+<t>void</t> setup() {
+  Serial.begin(<n>9600</n>);
+  pinMode(LED, OUTPUT); pinMode(TRIG, OUTPUT);
+  dht.begin();
+}
+
+<t>void</t> loop() {
+  <t>float</t> t = dht.readTemperature();
+  digitalWrite(LED, t &gt; <n>30</n>);
+  Serial.println(t);
+  delay(<n>2000</n>);
+}`)}</div>
+ <div class="ai"><b>✨ Ask AI</b> <span class="mut">· sees: Uno, DHT22→D2, LED→D9, HC-SR04→D7/D8</span>
+ <div class="q">Also beep a buzzer when someone is closer than 20 cm</div><button class="btn g">✨ Generate</button> <button class="btn">Explain</button> <button class="btn">Fix error</button></div>
+ <div class="serial">31.0 °C<br>31.0 °C<br><span style="color:#fbbf24">LED ON (t &gt; 30)</span><br>31.1 °C</div></div>
+ <div class="panel env"><h4>🌡 Environment</h4><label>Air temperature<b>31.0 °C</b></label><div class="bar"><i style="width:62%"></i></div>
+ <label>Humidity<b>48 %</b></label><div class="bar"><i style="width:48%"></i></div><label>🔥 Lighter near DHT22<b>off</b></label><div class="bar"><i style="width:2%"></i></div>
+ <label>Object in front of HC-SR04<b>50 cm</b></label><div class="bar"><i style="width:25%"></i></div></div>`;
+}
+
+if(view==='analog'){
+ const bb=breadboard(0,0);
+ dip(8,bbPos(bb,31,0).x+P*1.5,9,0,'LM358');
+ const rin=resistor(bbPos(bb,20,-6.4),bbPos(bb,30,-6.4),['#6b3a1e','#000','#ff8a00','#c9a24a']); // 10k
+ resistor(bbPos(bb,30,-11.5),bbPos(bb,30,-11.5).clone().setX(bbPos(bb,30,0).x+P*12),['#c00000','#000','#ff8a00','#c9a24a']); // 20k... Rf
+ ecap(bbPos(bb,14,-8));trimpot(bbPos(bb,8,-8));
+ wire([bbPos(bb,30,-14),bbPos(bb,42,-14)],'#7c3aed',10);
+ wire([bbPos(bb,33,8.9),bbPos(bb,33,22.5)],'#1f2937',8);
+ wire([bbPos(bb,30,8.9),bbPos(bb,30,25)],'#e11d48',10);
+ wire([bbPos(bb,8,-14),bbPos(bb,8,-22.5)],'#e11d48',8);
+ wire([bbPos(bb,10,-14),bbPos(bb,20,-11.5)],'#f59e0b',10);
+ wire([bbPos(bb,31,-14),bbPos(bb,31,-25)],'#1f2937',8);
+ // probe clips
+ [[42,-30,'#facc15'],[20,-30,'#38bdf8']].forEach(([c,z,col])=>{const p=bbPos(bb,c,-14);wire([p,V(p.x-20,4,-110)],col,24);});
+ cam.position.set(30,190,190);ctl.target.set(10,6,-8);
+ L('LM358 op-amp','dual · single supply',bbPos(bb,32.5,0).setY(18),true,true);
+ L('R_in 10 kΩ','brown-black-orange',bbPos(bb,25,-6.4).setY(16),false,true);
+ L('R_f 20 kΩ','red-black-orange',bbPos(bb,36,-11.5).setY(16),false,true);
+ L('10 µF','electrolytic',bbPos(bb,14.5,-8).setY(30),false,true);
+ L('10 kΩ trimmer','input level',bbPos(bb,8,-8).setY(24),false,true);
+ UI.innerHTML=`
+ <div class="panel" style="right:14px;top:84px;width:400px"><h4>Schematic <span class="pill">auto-drawn from breadboard</span></h4>
+ <svg viewBox="0 0 380 170" width="100%"><g fill="none" stroke="#1d2433" stroke-width="2">
+ <path d="M150 50 L150 130 L230 90 Z" fill="#eef2ff" stroke="#4f46e5"/><text x="158" y="75" font-size="16" fill="#1d2433" stroke="none">−</text><text x="158" y="118" font-size="16" fill="#1d2433" stroke="none">+</text>
+ <path d="M20 70 H50"/><path d="M50 70 l5 -8 l10 16 l10 -16 l10 16 l10 -16 l5 8"/><path d="M100 70 H150"/><circle cx="20" cy="70" r="4" fill="#38bdf8" stroke="#38bdf8"/>
+ <path d="M125 70 V20 H160"/><path d="M160 20 l5 -8 l10 16 l10 -16 l10 16 l10 -16 l5 8"/><path d="M210 20 H270 V90"/><path d="M230 90 H330"/><circle cx="330" cy="90" r="4" fill="#facc15" stroke="#facc15"/>
+ <path d="M150 112 H120 V150"/><path d="M110 150 H130 M114 156 H126 M118 162 H122"/></g>
+ <g font-size="12" fill="#6b7385"><text x="55" y="95">R_in 10k</text><text x="165" y="45">R_f 20k</text><text x="5" y="58">Vin</text><text x="318" y="80">Vout</text><text x="245" y="130">Gain = −R_f/R_in = −2</text></g></svg>
+ <h4 style="margin-top:12px">Oscilloscope</h4><svg class="scope" viewBox="0 0 370 150" width="100%"><g stroke="#1e293b">${Array.from({length:11},(_,i)=>`<path d="M${i*37} 0V150"/>`).join('')}${Array.from({length:7},(_,i)=>`<path d="M0 ${i*25}H370"/>`).join('')}</g>
+ <path d="${wave(370,75,18,0)}" fill="none" stroke="#38bdf8" stroke-width="2"/><path d="${wave(370,75,36,Math.PI)}" fill="none" stroke="#facc15" stroke-width="2"/>
+ <text x="8" y="16" fill="#38bdf8" font-size="11">CH1 Vin 1 Vpp 1 kHz</text><text x="200" y="16" fill="#facc15" font-size="11">CH2 Vout 2 Vpp · 180°</text></svg>
+ <div class="kv"><span>Measured gain</span><b>−2.00 ×</b><span>Supply</span><b>±5 V</b><span>Output swing</span><b>OK, not clipping</b></div>
+ <p class="mut" style="margin:10px 0 0">⚠ LM358 output can't reach the + rail: max ≈ V+ − 1.5 V. The simulator models this.</p></div>
+ <div class="panel env"><h4>🔋 Function generator → Vin</h4><label>Waveform<b>Sine</b></label><label>Amplitude<b>1.0 Vpp</b></label><div class="bar"><i style="width:20%"></i></div>
+ <label>Frequency<b>1 kHz</b></label><div class="bar"><i style="width:35%"></i></div><label>Supply<b>±5 V</b></label><div class="bar"><i style="width:50%"></i></div></div>`;
+}
+
+if(view==='explore'){
+ // exploded DHT22
+ const g=grp(0,0,0);
+ const shellM=new THREE.MeshPhysicalMaterial({color:'#ffffff',roughness:.4,transmission:.0,transparent:true,opacity:.28,side:THREE.DoubleSide});
+ const front=rbox(15.1,3,25,1,shellM,0,0,0,g);front.rotation.x=Math.PI/2;front.position.set(0,32,-14);
+ for(let r=0;r<7;r++)for(let c=-1;c<=1;c++)box(2.6,1.4,3.2,M('#94a3b8',{transparent:true,opacity:.35}),c*3.3,24+r*2.5,-14,g);
+ const back=rbox(15.1,3,25,1,M('#f7f7f4'),0,0,0,g);back.rotation.x=Math.PI/2;back.position.set(0,32,16);
+ const pcb=box(13,22,1.2,mat.pcbG,0,32,0,g);
+ const hum=box(6,8,1,M('#3b82f6',{roughness:.2,metalness:.3}),-2.5,37,-1,g);
+ for(let i=0;i<5;i++)box(5,.25,.2,mat.gold,-2.5,34+i*1.5,-1.6,g);
+ const th=cyl(1.6,3.5,M('#111'),3.5,28,-1.6,g);th.rotation.x=Math.PI/2;
+ const mcu=box(4,1.2,4,mat.blk,3.2,36,-1.2,g);mcu.rotation.x=Math.PI/2;
+ for(let i=0;i<4;i++){box(.6,16,.4,mat.metal,(i-1.5)*P,13,0,g)}
+ box(.4,.4,1,M('#b45309'),-1,27,-1.2,g);
+ cam.position.set(-70,60,-85);ctl.target.set(0,30,0);
+ L('Front grille','lets air reach the sensor',V(0,46,-14),false);
+ L('Capacitive humidity element','polymer film between electrodes',V(-2.5,42,-1),true);
+ L('NTC thermistor','resistance ↓ as temp ↑',V(3.5,25,-2),false);
+ L('8-bit MCU + calibration OTP','sends 40-bit result',V(3.2,39,-1.2),false);
+ L('4 pins, 2.54 mm','VDD · DATA · NC · GND',V(0,6,0),false);
+ L('Rear housing','ABS',V(0,46,16),false);
+ UI.innerHTML=`
+ <div class="panel" style="right:14px;top:84px;width:380px"><span class="pill w">Datasheet values · hardware check pending</span>
+ <h3 style="margin:10px 0 2px">DHT22 / AM2302</h3><div class="mut">Temperature &amp; humidity sensor</div>
+ <div class="seg" style="margin:12px 0 0"><span>Outside</span><span class="on">Inside</span><span>Pinout</span><span>Signal</span><span>Buy</span></div>
+ <p style="line-height:1.55">The housing is pulled apart in 3D. Inside, a <b>polymer film</b> soaks up moisture and changes capacitance, a <b>thermistor</b> changes resistance with heat, and a tiny <b>MCU</b> converts both using factory calibration and sends 40 bits on one wire.</p>
+ <div class="kv"><span>Supply</span><b>3.3–6 V</b><span>Temp</span><b>−40…80 °C, ±0.5 °C</b><span>Humidity</span><b>0–100 %, ±2 %RH</b><span>Max rate</span><b>1 reading / 2 s</b><span>Price</span><b>₹250–350</b></div>
+ <div style="display:flex;gap:8px;margin-top:14px"><button class="btn p">Explode ⇄ Assemble</button><button class="btn">📄 Datasheet</button><button class="btn">➕ Add to circuit</button></div></div>
+ <div class="panel env" style="width:280px"><h4>Explode distance</h4><div class="bar"><i style="width:70%"></i></div><label>Cross-section<b>off</b></label><label>Show labels<b>on</b></label></div>`;
+}
+
+if(view==='meter'){
+ const bb=breadboard(60,0,40);
+ const ra=bbPos(bb,10,-6.4).setX(60+(10-31)*P), rb=ra.clone().setX(ra.x+P*6);
+ resistor(ra,rb,['#6b3a1e','#000','#ff8a00','#c9a24a']);
+ const m=grp(-140,0,10);m.rotation.y=.18;
+ rbox(84,30,165,9,M('#f5b301',{roughness:.7}),0,15,0,m);           // rubber holster
+ rbox(70,4,150,6,M('#2b2f36',{roughness:.5}),0,30.5,0,m);           // face
+ const lcd=textPlane('9.98 kΩ','#111',54,24,'#b9c8a6');lcd.position.set(0,32.7,-45);m.add(lcd);
+ const lcdT=textPlane('AUTO  Ω   HOLD','#2a2a2a',54,6);lcdT.position.set(0,32.8,-55);m.add(lcdT);
+ [['HOLD',-24],['RANGE',-8],['REL',8],['SEL',24]].forEach(([t,x])=>{rbox(13,3,7,2,M('#475569'),x,32.5,-24,m);const tp=textPlane(t,'#fff',12,3.5);tp.position.set(x,34.2,-24);m.add(tp)});
+ const dial=cyl(22,6,M('#1f2937',{roughness:.35}),0,34,18,m,64);
+ const knob=box(36,5,8,M('#111827'),0,38,18,m);knob.rotation.y=-.78;
+ const ptr=box(2,1,9,M('#ef4444'),-10.6,40.6,7.4,m);ptr.rotation.y=-.78;
+ const modes=['OFF','V~','V⎓','mV','Ω','→|·)))','⊣⊢','Hz','°C','µA','mA','A'];
+ modes.forEach((t,i)=>{const a=-Math.PI/2-Math.PI*.95+i*(Math.PI*1.9/(modes.length-1));const tp=textPlane(t,t==='Ω'?'#facc15':'#e5e7eb',12,5);tp.position.set(Math.cos(a)*30,32.7,18+Math.sin(a)*30);m.add(tp)});
+ [['10A','#ef4444',-24],['mA µA','#ef4444',-8],['COM','#111',8],['VΩHz','#ef4444',24]].forEach(([t,c,x])=>{cyl(4.5,3,M('#0b0b0b'),x,32,62,m);cyl(2.4,3.2,M(c==='#111'?'#222':'#b91c1c'),x,32.3,62,m);const tp=textPlane(t,'#e5e7eb',14,4);tp.position.set(x,32.7,70);m.add(tp)});
+ const jack=x=>new THREE.Vector3(-140,33,10).add(new THREE.Vector3(x,0,62).applyAxisAngle(new THREE.Vector3(0,1,0),.18));
+ const probe=(from,tip,col)=>{const c=new THREE.CatmullRomCurve3([from,from.clone().add(V(0,18,10)),from.clone().lerp(tip,.5).setY(4),tip.clone().add(V(-30,16,0))],false,'centripetal');
+   add(new THREE.TubeGeometry(c,120,1.4,12),M(col,{roughness:.5}));
+   const h=grp(tip.x-18,tip.y+10,tip.z);h.rotation.z=-1.05;cyl(3.2,32,M(col,{roughness:.4}),0,0,0,h);cyl(4.2,3,M(col),0,-10,0,h);cyl(.6,9,mat.metal,0,-20,0,h,12);};
+ probe(jack(8),ra.clone().setY(13),'#1f2937');probe(jack(24),rb.clone().setY(13),'#dc2626');
+ cam.position.set(-20,250,250);ctl.target.set(-40,10,10);
+ L('Digital multimeter','auto-range · 6000 counts',V(-140,48,-50),false,true);
+ L('Rotary selector: Ω','turn to choose what to measure',V(-140,48,30),true);
+ L('COM = black','always',jack(8).setY(40),false);L('V Ω Hz = red','for volts, ohms, diode',jack(24).setY(40),false);
+ L('Resistor under test','brown-black-orange = 10 kΩ ±5%',ra.clone().lerp(rb,.5).setY(20),true,true);
+ UI.innerHTML=`
+ <div class="panel" style="right:14px;top:84px;width:400px;bottom:14px;overflow:auto"><h4>🔧 Multimeter <span class="pill">every mode simulated</span></h4>
+ <div style="background:#b9c8a6;border-radius:12px;padding:14px 16px;font:700 40px ui-monospace,monospace;text-align:right;color:#111">9.98 <span style="font-size:22px">kΩ</span><div style="font:600 11px system-ui;text-align:left;color:#333">AUTO · Ω · within 10 kΩ ±5 % ✔</div></div>
+ <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px">${[['V⎓','DC volts'],['V~','AC volts'],['mV','millivolts'],['Ω','resistance'],['→|','diode'],['·)))','continuity'],['⊣⊢','capacitance'],['Hz','frequency'],['%','duty cycle'],['°C','temp probe'],['mA','DC/AC current'],['A','up to 10 A']].map(([a,b])=>`<div style="border:1px solid ${a==='Ω'?'var(--acc)':'var(--line)'};background:${a==='Ω'?'#eef2ff':'#fff'};border-radius:10px;padding:7px 4px;text-align:center"><b style="font-size:16px">${a}</b><div class="mut" style="font-size:10.5px">${b}</div></div>`).join('')}</div>
+ <h4 style="margin-top:14px">How to measure resistance</h4>
+ <p style="margin:0;line-height:1.55;font-size:13px">1. <b>Power off</b> the circuit.<br>2. Black lead → <b>COM</b>, red lead → <b>VΩHz</b>.<br>3. Turn the dial to <b>Ω</b>.<br>4. Touch the probes across the resistor (direction doesn't matter).</p>
+ <h4 style="margin-top:12px">The simulator will warn you when</h4>
+ <p class="mut" style="margin:0;line-height:1.6;font-size:12.5px">⚠ You measure Ω in a powered circuit<br>⚠ The red lead is in the A/mA jack while measuring volts (short circuit, blows fuse)<br>⚠ You measure current in parallel instead of in series<br>⚠ The resistor is still in a circuit (parallel paths change the reading)</p>
+ <div class="kv"><span>Accuracy (Ω)</span><b>±(0.8 % + 3 digits)</b><span>Inputs</span><b>10 MΩ (V), fused mA & 10 A</b></div></div>
+ <div class="panel env"><h4>🧪 Practice mode</h4><label>Task<b>Measure an unknown resistor</b></label><label>Your answer<b>10 kΩ ✔</b></label><div class="bar"><i style="width:100%"></i></div></div>`;
+}
+document.querySelector('.view')?.remove();
+UI.insertAdjacentHTML('beforeend',`<div class="panel view"><span>Top</span><span class="on">Perspective</span><span>Side</span><span>⟲ Orbit</span></div>`);
+
+function code(s){return s.split('\n').map(l=>'<div>'+(l.replace(/<(\w)>/g,'<span class=$1>').replace(/<\/\w>/g,'</span>')||' ')+'</div>').join('')}
+function wave(w,mid,a,ph){let d='';for(let x=0;x<=w;x+=3)d+=(x?'L':'M')+x+' '+(mid-a*Math.sin(x/w*4*Math.PI+ph)).toFixed(1);return d}
+
+const lab=document.getElementById('labels');
+lab.innerHTML=labels.map((l,i)=>`<div class="lab ${l.hot?'hot':''}" id="l${i}">${l.t}${l.info?'<span class=i>i</span>':''}<small>${l.sub}</small></div>`).join('');
+function place(){labels.forEach((l,i)=>{const p=l.v.clone().project(cam);const e=document.getElementById('l'+i);e.style.left=(p.x+1)/2*innerWidth+'px';e.style.top=(1-p.y)/2*innerHeight-6+'px'})}
+addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();R.setSize(innerWidth,innerHeight)});
+// frame scene a bit right of the rail
+cam.setViewOffset(innerWidth,innerHeight,({mcu:70,analog:70,explore:110,meter:60})[view],0,innerWidth,innerHeight);
+let n=0;(function loop(){ctl.update();R.render(S,cam);place();if(++n===20)document.body.dataset.ready=1;requestAnimationFrame(loop)})();
+</script></body></html>
