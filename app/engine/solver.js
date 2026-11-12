@@ -4,6 +4,7 @@
 //   {type:'S', a, b, v, r}                    voltage source v (a = +) with series resistance r
 //   {type:'I', a, b, i}                       current source: i amps into node a, out of node b
 //   {type:'C', a, b, c, v0}                   capacitor (open in DC; backward-Euler companion when dt given)
+//   {type:'L', a, b, l, i0}                   inductor (short in DC; backward-Euler companion when dt given)
 //   {type:'D', a, c, is, n}                   diode / LED (Shockley)
 //   {type:'Q', c, b, e, pol, is, bf, br}      bipolar transistor, pol = +1 NPN, -1 PNP (Ebers–Moll transport model)
 //   {type:'M', d, g, s, pol, vth, k, lambda}  MOSFET, pol = +1 N, -1 P (square law, smoothed)
@@ -15,7 +16,7 @@ const dexp = x => x > XMAX ? Math.exp(XMAX) * (1 + x - XMAX) : Math.exp(x);
 export function diodeCurrent(e, vd) { return e.is * (dexp(vd / (e.n * VT)) - 1); }
 
 // Currents flowing INTO each terminal for nonlinear devices, given terminal voltages.
-const DEVICES = {
+export const DEVICES = {
   D: { t: ['a', 'c'], f(e, [va, vc]) { const i = diodeCurrent(e, va - vc); return [i, -i]; } },
   Q: { t: ['c', 'b', 'e'], f(e, [vc, vb, ve]) {
     const p = e.pol, vbe = p * (vb - ve), vbc = p * (vb - vc);
@@ -61,6 +62,7 @@ export function solve(nodeCount, elements, { maxIter = 300, tol = 1e-7, dt = 0, 
       else if (e.type === 'S') { const g = 1 / Math.max(e.r, 1e-6); G(e.a, e.b, g); J(e.a, e.b, e.v * g); }
       else if (e.type === 'I') J(e.a, e.b, e.i);
       else if (e.type === 'C') { if (dt > 0) { const g = e.c / dt; G(e.a, e.b, g); J(e.a, e.b, g * (e.v0 || 0)); } }
+      else if (e.type === 'L') { if (dt > 0) { const g = dt / e.l; G(e.a, e.b, g); J(e.a, e.b, -(e.i0 || 0)); } else G(e.a, e.b, 1e6); }
       else if (e.type === 'OA') {
         // Linear gain A until the output would pass a rail, then clamp at that rail (mode switching).
         const rp = V[e.vp], rn = V[e.vn], g = 1 / e.ro, powered = iter === 0 || rp - rn > 1;
@@ -103,6 +105,7 @@ export function solve(nodeCount, elements, { maxIter = 300, tol = 1e-7, dt = 0, 
     if (e.type === 'S') return (e.v - (at(e.a) - at(e.b))) / Math.max(e.r, 1e-6);
     if (e.type === 'I') return e.i;
     if (e.type === 'C') return dt > 0 ? e.c / dt * ((at(e.a) - at(e.b)) - (e.v0 || 0)) : 0;
+    if (e.type === 'L') return dt > 0 ? (e.i0 || 0) + dt / e.l * (at(e.a) - at(e.b)) : (at(e.a) - at(e.b)) * 1e6;
     if (e.type === 'OA') return (at(e.o) - (e._mode === 'hi' ? at(e.vp) - e.hi : e._mode === 'lo' ? at(e.vn) + e.lo : (at(e.vp) - e.hi + at(e.vn) + e.lo) / 2 + e.a * (at(e.p) - at(e.n)))) / e.ro * -1;
     if (DEVICES[e.type]) { const I = DEVICES[e.type].f(e, DEVICES[e.type].t.map(t => at(e[t]))); return I[0]; }
     return 0;

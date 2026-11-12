@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ccbb Circuit Lab</title>
+<link rel="stylesheet" href="ui/style.css"><link rel="stylesheet" href="ui/lab.css">
+<link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg"><meta name="theme-color" content="#0f9d8f">
+<script type="module" src="ui/lab.js"></script>
+</head><body>
+<header class="top">
+  <a class="brand" href="../index.html" title="Home"><span class="logo"></span>ccbb <small>Circuit Lab</small></a>
+  <label class="field">Experiment <select id="tpl"><option value="">Choose an experiment…</option></select></label>
+  <button id="bNew" class="btn">New</button>
+  <button id="bSave" class="btn">Save file</button>
+  <label class="btn">Open file<input id="fOpen" type="file" accept=".json" hidden></label>
+  <span class="grow"></span>
+  <a class="btn" href="index.html">⚡ Circuit Studio</a>
+</header>
+<div class="steps"><b>①</b> Click a symbol, then click on the grid to place it <b>②</b> Press <b>W</b> (or Wire) and click pin → pin to draw wires <b>③</b> Add <b>GND</b> and a <b>Probe</b>, choose an analysis and press <b>Run</b>. <span class="mut">R rotates · Delete removes · Esc cancels · drag to move</span></div>
+<main class="lab">
+  <aside class="sym" id="sym"></aside>
+  <section class="sheet" id="sheetWrap"><svg id="sheet" width="1400" height="900"></svg><div class="note" id="note" hidden></div></section>
+  <aside class="side">
+    <div class="card" id="props"><b>Select a part</b><p class="mut small">Click a symbol on the sheet to edit its value.</p></div>
+    <div class="card">
+      <b>Analysis</b>
+      <select id="kind"><option value="op">DC operating point</option><option value="tran">Transient (time)</option><option value="ac">AC sweep (Bode plot)</option><option value="dc">DC sweep</option></select>
+      <div id="aParams"></div>
+      <button class="btn run" id="bRun">▶ Run</button>
+      <div class="warnbox" id="aWarn"></div>
+    </div>
+  </aside>
+</main>
+<section class="results" id="results" hidden>
+  <div class="rhd"><b id="rTitle">Results</b><span class="grow"></span><span id="xSel"></span><button class="btn" id="bCsv">⬇ CSV</button><button class="btn icon" id="rClose">✕</button></div>
+  <div class="rbody"><canvas id="plot" width="1100" height="320"></canvas><div class="meas" id="meas"></div></div>
+</section>
+</body></html>

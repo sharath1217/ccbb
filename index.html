@@ -31,7 +31,7 @@ footer{padding:28px 0 40px;color:var(--mut);font-size:14px;border-top:1px solid 
   <div>
     <h1>Test your circuit <em>before</em> you buy the parts.</h1>
     <p class="lead">Build on a real-looking breadboard, run your Arduino, ESP32 or Pico code, measure with a multimeter and oscilloscope, and see mistakes (like a burnt LED) before they cost you money. Then get the exact shopping list with prices.</p>
-    <a class="cta" href="app/index.html">▶ Open Circuit Studio</a><a class="cta2" href="#lessons">Start the lessons</a>
+    <a class="cta" href="app/index.html">▶ Open Circuit Studio</a><a class="cta2" href="app/lab.html">📈 Circuit Lab</a><a class="cta2" href="#lessons">Start the lessons</a>
     <div class="stats"><div><b>73</b>components</div><div><b>17</b>microcontrollers</div><div><b>11</b>real-world tools</div><div><b>17</b>projects</div><div><b>Free</b>works offline</div></div>
   </div>
   <img class="shot" src="screenshots/app-5-dimmer.png" alt="Circuit Studio showing an Arduino Uno wired to a breadboard with an LED, resistor and potentiometer, with code and serial monitor on the right">
@@ -45,6 +45,7 @@ footer{padding:28px 0 40px;color:var(--mut);font-size:14px;border-top:1px solid 
     <div class="card"><div class="ic">💻</div><h3>Run your code</h3><p>Write Arduino code for Uno, Nano, Mega, ESP32, ESP8266, Pico, RP2040 or STM32. Includes DHT, Servo, LCD and OLED libraries.</p></div>
     <div class="card"><div class="ic">📈</div><h3>Lab instruments</h3><p>Multimeter (V, A, Ω), 2-channel oscilloscope and a bench power supply with current limit.</p></div>
     <div class="card"><div class="ic">🔬</div><h3>Know every part</h3><p>Double-click any part to see what it looks like, what is inside, its pins, specs, common mistakes and buying tips.</p></div>
+    <div class="card"><div class="ic">📈</div><h3>Circuit Lab (free SPICE-style analysis)</h3><p>Draw schematics with resistors, capacitors, inductors, op-amps, diodes and transistors. Run DC operating point, transient, AC (Bode) and DC sweep, with automatic measurements.</p></div>
     <div class="card"><div class="ic">🧾</div><h3>Parts list &amp; cost</h3><p>One click turns your circuit into a shopping list with typical Indian prices, copy or download as CSV.</p></div>
   </div>
 </section>
@@ -65,6 +66,25 @@ footer{padding:28px 0 40px;color:var(--mut);font-size:14px;border-top:1px solid 
     <a class="lesson" href="app/index.html?project=weather"><div><span class="lvl">Sensors</span><b>DHT22 on an LCD</b><span>Libraries and I2C displays.</span></div></a>
     <a class="lesson" href="app/index.html?project=radar"><div><span class="lvl">Sensors</span><b>Ultrasonic → servo</b><span>pulseIn and the Servo library.</span></div></a>
     <a class="lesson" href="app/index.html?project=esp32"><div><span class="lvl">3.3 V boards</span><b>ESP32 blink</b><span>What changes on a 3.3 V board.</span></div></a>
+  </div>
+</section>
+
+<section id="lab">
+  <h2>Circuit Lab experiments</h2><p class="sub">Schematic-level analysis like the paid tools, free. Each experiment opens with its analysis already run.</p>
+  <div class="lessons">
+    <a class="lesson" href="app/lab.html?t=divider"><div><span class="lvl">DC</span><b>Voltage divider</b><span>Operating point: every voltage and current.</span></div></a>
+    <a class="lesson" href="app/lab.html?t=led"><div><span class="lvl">DC</span><b>LED current</b><span>Choosing the series resistor.</span></div></a>
+    <a class="lesson" href="app/lab.html?t=rccharge"><div><span class="lvl">Transient</span><b>RC charging</b><span>The time constant τ = RC.</span></div></a>
+    <a class="lesson" href="app/lab.html?t=rclow"><div><span class="lvl">AC sweep</span><b>RC low-pass filter</b><span>Bode plot and the −3 dB point.</span></div></a>
+    <a class="lesson" href="app/lab.html?t=rchigh"><div><span class="lvl">AC sweep</span><b>RC high-pass filter</b><span>Blocking DC.</span></div></a>
+    <a class="lesson" href="app/lab.html?t=rlc"><div><span class="lvl">AC sweep</span><b>RLC resonance</b><span>f₀ = 1 / 2π√LC.</span></div></a>
+    <a class="lesson" href="app/lab.html?t=inverting"><div><span class="lvl">Op-amps</span><b>Inverting amplifier</b><span>Gain −Rf/Rin and clipping.</span></div></a>
+    <a class="lesson" href="app/lab.html?t=noninv"><div><span class="lvl">Op-amps</span><b>Non-inverting amplifier</b><span>Gain 1 + Rf/Rg.</span></div></a>
+    <a class="lesson" href="app/lab.html?t=integrator"><div><span class="lvl">Op-amps</span><b>Integrator</b><span>Square in, triangle out.</span></div></a>
+    <a class="lesson" href="app/lab.html?t=halfwave"><div><span class="lvl">Power</span><b>Half-wave rectifier</b><span>Diode + filter capacitor ripple.</span></div></a>
+    <a class="lesson" href="app/lab.html?t=zener"><div><span class="lvl">Power</span><b>Zener regulator</b><span>DC sweep of the input.</span></div></a>
+    <a class="lesson" href="app/lab.html?t=diodeiv"><div><span class="lvl">Devices</span><b>Diode I–V curve</b><span>The 0.7 V knee.</span></div></a>
+    <a class="lesson" href="app/lab.html?t=ceamp"><div><span class="lvl">Transistors</span><b>Common-emitter amplifier</b><span>Biasing and voltage gain.</span></div></a>
   </div>
 </section>
 

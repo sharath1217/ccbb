@@ -375,8 +375,8 @@ await test('Home page: every lesson link opens its project without errors', asyn
   const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } }); const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.goto(base.replace('app/index.html', 'index.html')); if (SHOTS) await p.screenshot({ path: path.join(root, 'screenshots', 'home.png'), fullPage: true });
   const links = await p.locator('a.lesson').evaluateAll(as => as.map(a => a.href));
-  assert(links.length === 13, 'lessons ' + links.length);
-  for (const l of links) { await p.goto(l); await p.waitForFunction(() => window.ccbb && window.ccbb.S.ready, null, { timeout: 15000 });
+  assert(links.length === 26, 'lessons ' + links.length);
+  for (const l of links.filter(x => x.includes('project='))) { await p.goto(l); await p.waitForFunction(() => window.ccbb && window.ccbb.S.ready, null, { timeout: 15000 });
     assert(await p.locator('.part').count() > 1, 'empty project ' + l); }
   const man = JSON.parse(fs.readFileSync(path.join(root, 'app/manifest.webmanifest'), 'utf8')); assert(man.name && man.icons.length && man.start_url, 'manifest');
   assert(errs.length === 0, errs.join(' | ')); await ctx.close();
@@ -424,6 +424,32 @@ await test('Lab assistant (offline) explains a burnt LED and how to wire a part'
   await p.fill('#aIn', 'how do I test the gas sensor?'); await p.click('#aForm button');
   const a3 = await p.locator('.amsg.bot').last().innerText(); assert(/gas can/i.test(a3) && /fan/i.test(a3), a3);
   await shot(p, '21-assistant'); await p.close();
+});
+
+await test('Circuit Lab: every experiment runs and shows results without errors', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 1500, height: 950 }, deviceScaleFactor: SHOTS ? 2 : 1 }); const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+  await p.goto(base.replace('index.html', 'lab.html')); await p.waitForSelector('body[data-ready]');
+  const keys = await p.evaluate(() => Object.keys(window.lab.LAB_TEMPLATES)); assert(keys.length >= 13, 'templates ' + keys.length);
+  for (const k of keys) { await p.goto(base.replace('index.html', 'lab.html') + '?t=' + k); await p.waitForSelector('body[data-ready]'); await p.waitForTimeout(150);
+    assert(!(await p.locator('#results').isHidden()), k + ': no results'); assert((await p.locator('#meas').innerText()).length > 10, k + ': empty measurements');
+    if (SHOTS && ['rclow', 'inverting', 'halfwave', 'zener', 'ceamp', 'divider'].includes(k)) await p.screenshot({ path: path.join(root, 'screenshots', 'lab-' + k + '.png') }); }
+  const rc = await p.goto(base.replace('index.html', 'lab.html') + '?t=rclow').then(() => p.waitForTimeout(300)).then(() => p.locator('#meas').innerText());
+  assert(/−3 dB \(high\)\s*1(5[5-9]|6[0-3])(\.\d)? Hz/.test(rc), 'RC cut-off readout: ' + rc.slice(0, 200));
+  assert(errs.length === 0, errs.join(' | ')); await ctx.close();
+});
+
+await test('Circuit Lab: a student draws a voltage divider with the mouse and gets 6 V', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 1500, height: 950 } }); const p = await ctx.newPage(); p.on('dialog', d => d.accept());
+  await p.goto(base.replace('index.html', 'lab.html')); await p.waitForSelector('body[data-ready]'); await p.click('#bNew');
+  const sb = await p.locator('#sheet').boundingBox(), at = (x, y) => p.mouse.click(sb.x + x, sb.y + y);
+  const place = async (t, x, y, rot) => { await p.click(`.symb[data-t="${t}"]`); await p.mouse.move(sb.x + x, sb.y + y); if (rot) await p.keyboard.press('r'); await at(x, y); };
+  await place('vdc', 100, 100); await place('res', 160, 100); await place('res', 280, 100, true); await place('gnd', 100, 200); await place('gnd', 280, 200); await place('probe', 280, 60);
+  await p.evaluate(() => { window.lab.L.sch.comps.find(c => c.id === 'V1').props.V = '9'; window.lab.L.sch.comps.find(c => c.id === 'R2').props.R = '20k'; window.lab.L.sch.comps.find(c => c.id === 'R1').props.R = '10k'; });
+  const wire = async (a, b) => { await p.keyboard.press('w'); await at(...a); await at(...b); await p.keyboard.press('Escape'); };
+  await wire([100, 100], [160, 100]); await wire([220, 100], [280, 100]); await wire([280, 160], [280, 200]); await wire([100, 160], [100, 200]); await wire([280, 60], [280, 100]);
+  await p.selectOption('#kind', 'op'); await p.click('#bRun'); await p.waitForTimeout(200);
+  const t = await p.locator('#meas').innerText(); assert(/Vout\s*6 V/.test(t), 'divider result: ' + t.slice(0, 200));
+  await ctx.close();
 });
 
 await test('Code panel minimizes and restores', async () => {
