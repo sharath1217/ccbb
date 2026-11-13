@@ -41,3 +41,8 @@ Open the HTML files through a local server (needed for the 3D pages):
 - Three.js (MIT): `vendor/three/`
 - Anthropic TypeScript SDK (MIT), bundled for the browser: `vendor/anthropic-sdk.mjs`
 - Wokwi Elements (MIT): `vendor/wokwi-elements.bundle.js`
+
+## Desktop app (free, works offline)
+- **Download:** GitHub → Actions → "Desktop installers" → latest run → `ccbb-windows-latest` (Windows installer `.exe`) or `ccbb-ubuntu-latest` (Linux AppImage). Tagged versions also appear under Releases.
+- **Build it yourself:** `npm install`, then `npm run dist:win` or `npm run dist:linux`. Run from source with `npm run desktop`.
+- Licence: GPL-3.0 (free for everyone, forever).

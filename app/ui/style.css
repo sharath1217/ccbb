@@ -76,3 +76,5 @@ svg.wires{pointer-events:none}.wire{pointer-events:stroke}
 .amsg pre{background:#1c2230;color:#d1fae5;padding:8px;border-radius:8px;overflow:auto;font-size:12px;margin:6px 0;white-space:pre}
 .achips{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0}.achips button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:4px 9px;font:12px inherit;cursor:pointer}
 .ain{display:flex;gap:6px}.ain input{flex:1;border:1px solid var(--line);border-radius:9px;padding:8px;font:inherit}
+.top .btn,.top .field{white-space:nowrap}.top{flex-wrap:nowrap;overflow-x:auto}
+@media (max-width:1500px){.top .field{font-size:0}.top .field select{font-size:13px}.brand small{display:none}}

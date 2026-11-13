@@ -1,0 +1,36 @@
+# Builds the free ccbb desktop installers on GitHub's free runners (public repo = no cost).
+# Run it from the Actions tab ("Run workflow"), or push a tag like v0.3.0 to also publish a Release.
+name: Desktop installers
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            cmd: npx electron-builder --win nsis --publish never
+            files: dist/*.exe
+          - os: ubuntu-latest
+            cmd: npx electron-builder --linux AppImage --publish never
+            files: dist/*.AppImage
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npm run test:unit
+      - run: ${{ matrix.cmd }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ccbb-${{ matrix.os }}
+          path: ${{ matrix.files }}
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with: { files: '${{ matrix.files }}' }
