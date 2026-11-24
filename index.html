@@ -31,7 +31,7 @@ footer{padding:28px 0 40px;color:var(--mut);font-size:14px;border-top:1px solid 
   <div>
     <h1>Test your circuit <em>before</em> you buy the parts.</h1>
     <p class="lead">Build on a real-looking breadboard, run your Arduino, ESP32 or Pico code, measure with a multimeter and oscilloscope, and see mistakes (like a burnt LED) before they cost you money. Then get the exact shopping list with prices.</p>
-    <a class="cta" href="app/index.html">▶ Open Circuit Studio</a><a class="cta2" href="app/lab.html">📈 Circuit Lab</a><a class="cta2" href="#lessons">Start the lessons</a>
+    <a class="cta" href="app/index.html">▶ Open Circuit Studio</a><a class="cta2" href="app/lab.html">📈 Circuit Lab</a><a class="cta2" href="app/asm51.html">🔢 8051 Assembly Lab</a><a class="cta2" href="#lessons">Start the lessons</a>
     <div class="stats"><div><b>73</b>components</div><div><b>17</b>microcontrollers</div><div><b>11</b>real-world tools</div><div><b>17</b>projects</div><div><b>Free</b>works offline</div></div>
   </div>
   <img class="shot" src="screenshots/app-5-dimmer.png" alt="Circuit Studio showing an Arduino Uno wired to a breadboard with an LED, resistor and potentiometer, with code and serial monitor on the right">
@@ -85,6 +85,25 @@ footer{padding:28px 0 40px;color:var(--mut);font-size:14px;border-top:1px solid 
     <a class="lesson" href="app/lab.html?t=zener"><div><span class="lvl">Power</span><b>Zener regulator</b><span>DC sweep of the input.</span></div></a>
     <a class="lesson" href="app/lab.html?t=diodeiv"><div><span class="lvl">Devices</span><b>Diode I–V curve</b><span>The 0.7 V knee.</span></div></a>
     <a class="lesson" href="app/lab.html?t=ceamp"><div><span class="lvl">Transistors</span><b>Common-emitter amplifier</b><span>Biasing and voltage gain.</span></div></a>
+  </div>
+</section>
+
+<section id="asm">
+  <h2>8051 Assembly Lab</h2><p class="sub">Write, assemble and step through 8051 assembly with registers, flags, RAM and ports visible, like Keil's debugger.</p>
+  <div class="lessons">
+    <a class="lesson" href="app/asm51.html?p=blockmove"><div><span class="lvl">Data transfer</span><b>Block move</b><span>MOVX with DPTR.</span></div></a>
+    <a class="lesson" href="app/asm51.html?p=exchange"><div><span class="lvl">Data transfer</span><b>Block exchange</b><span>@R0, @R1 and XCH.</span></div></a>
+    <a class="lesson" href="app/asm51.html?p=sort"><div><span class="lvl">Arrays</span><b>Ascending sort</b><span>Bubble sort.</span></div></a>
+    <a class="lesson" href="app/asm51.html?p=largest"><div><span class="lvl">Arrays</span><b>Largest number</b><span>CJNE and the carry.</span></div></a>
+    <a class="lesson" href="app/asm51.html?p=add16"><div><span class="lvl">Arithmetic</span><b>16-bit addition</b><span>ADD and ADDC.</span></div></a>
+    <a class="lesson" href="app/asm51.html?p=sub16"><div><span class="lvl">Arithmetic</span><b>16-bit subtraction</b><span>SUBB and borrow.</span></div></a>
+    <a class="lesson" href="app/asm51.html?p=muldiv"><div><span class="lvl">Arithmetic</span><b>Multiply and divide</b><span>MUL AB, DIV AB.</span></div></a>
+    <a class="lesson" href="app/asm51.html?p=square"><div><span class="lvl">Arithmetic</span><b>Square and cube</b><span>Repeated MUL.</span></div></a>
+    <a class="lesson" href="app/asm51.html?p=bcdcount"><div><span class="lvl">Counters</span><b>BCD up counter</b><span>DA A and delays.</span></div></a>
+    <a class="lesson" href="app/asm51.html?p=hexascii"><div><span class="lvl">Code conversion</span><b>Hex to ASCII</b><span>Nibbles and lookups.</span></div></a>
+    <a class="lesson" href="app/asm51.html?p=ones"><div><span class="lvl">Logic</span><b>Count 1s and 0s</b><span>RLC through carry.</span></div></a>
+    <a class="lesson" href="app/asm51.html?p=timerdelay"><div><span class="lvl">Timers</span><b>Timer 0 delay</b><span>Mode 1, TF0 polling.</span></div></a>
+    <a class="lesson" href="app/asm51.html?p=serial"><div><span class="lvl">Serial</span><b>Transmit at 9600 baud</b><span>Timer 1 mode 2, SBUF, TI.</span></div></a>
   </div>
 </section>
 

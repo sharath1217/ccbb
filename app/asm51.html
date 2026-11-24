@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ccbb 8051 Assembly Lab</title>
+<link rel="stylesheet" href="ui/style.css"><link rel="stylesheet" href="ui/asm51.css">
+<link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg">
+<script type="module" src="ui/asm51.js"></script>
+</head><body>
+<header class="top">
+  <a class="brand" href="../index.html" title="Home"><span class="logo"></span>ccbb <small>8051 Assembly Lab</small></a>
+  <label class="field">Program <select id="tpl"><option value="">Choose a lab program…</option></select></label>
+  <button class="btn" id="bNew">New</button><button class="btn" id="bSave">Save .asm</button><label class="btn">Open .asm<input type="file" id="fOpen" accept=".asm,.a51,.txt" hidden></label>
+  <span class="grow"></span><a class="btn" href="index.html">⚡ Studio</a><a class="btn" href="lab.html">📈 Circuit Lab</a>
+</header>
+<div class="toolbar">
+  <button class="btn" id="bAsm">🔨 Assemble</button>
+  <button class="btn run" id="bRun">▶ Run</button>
+  <button class="btn" id="bStep">⤼ Step</button>
+  <button class="btn" id="bStop" disabled>■ Stop</button>
+  <button class="btn" id="bReset">⟲ Reset</button>
+  <label class="field">Speed <select id="speed"><option value="real">Real time (11.0592 MHz)</option><option value="fast" selected>As fast as possible</option></select></label>
+  <span class="grow"></span><span class="pill" id="status">Ready</span><span class="mut" id="clock"></span>
+</div>
+<main class="asm">
+  <section class="edcol">
+    <div class="editor"><pre class="gutter" id="gut"></pre><textarea id="src" spellcheck="false"></textarea></div>
+    <div class="about" id="about"></div>
+    <div class="errs" id="errs"></div>
+  </section>
+  <section class="state">
+    <div class="box"><h4>Registers</h4><div class="regs" id="regs"></div><h4>PSW flags</h4><div class="flags" id="flags"></div></div>
+    <div class="box"><h4>Ports (click a pin to pull it LOW from outside)</h4><div id="ports"></div></div>
+    <div class="box"><h4>Serial output</h4><pre class="term" id="term"></pre></div>
+  </section>
+  <section class="mem">
+    <div class="box"><h4>Internal RAM <span class="mut small">(changed bytes are highlighted)</span></h4><div class="hex" id="iram"></div></div>
+    <div class="box"><h4>External RAM from <input id="xaddr" value="8000" size="5">H</h4><div class="hex" id="xram"></div></div>
+  </section>
+</main>
+</body></html>

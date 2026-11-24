@@ -375,7 +375,7 @@ await test('Home page: every lesson link opens its project without errors', asyn
   const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } }); const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.goto(base.replace('app/index.html', 'index.html')); if (SHOTS) await p.screenshot({ path: path.join(root, 'screenshots', 'home.png'), fullPage: true });
   const links = await p.locator('a.lesson').evaluateAll(as => as.map(a => a.href));
-  assert(links.length === 26, 'lessons ' + links.length);
+  assert(links.length === 39, 'lessons ' + links.length);
   for (const l of links.filter(x => x.includes('project='))) { await p.goto(l); await p.waitForFunction(() => window.ccbb && window.ccbb.S.ready, null, { timeout: 15000 });
     assert(await p.locator('.part').count() > 1, 'empty project ' + l); }
   const man = JSON.parse(fs.readFileSync(path.join(root, 'app/manifest.webmanifest'), 'utf8')); assert(man.name && man.icons.length && man.start_url, 'manifest');
@@ -450,6 +450,23 @@ await test('Circuit Lab: a student draws a voltage divider with the mouse and ge
   await p.selectOption('#kind', 'op'); await p.click('#bRun'); await p.waitForTimeout(200);
   const t = await p.locator('#meas').innerText(); assert(/Vout\s*6 V/.test(t), 'divider result: ' + t.slice(0, 200));
   await ctx.close();
+});
+
+await test('8051 Assembly Lab: every program assembles, runs and gives the right answer in the browser', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 1500, height: 950 }, deviceScaleFactor: SHOTS ? 2 : 1 }); const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+  const url = base.replace('index.html', 'asm51.html');
+  await p.goto(url); await p.waitForSelector('body[data-ready]');
+  const keys = await p.evaluate(() => Object.keys(window.asm.ASM_TEMPLATES));
+  for (const k of keys) { await p.goto(url + '?p=' + k); await p.waitForSelector('body[data-ready]'); await p.click('#bRun');
+    await p.waitForFunction(() => !window.asm.S.running, null, { timeout: 15000 });
+    const ok = await p.evaluate(k => window.asm.ASM_TEMPLATES[k].check(window.asm.S.cpu, window.asm.S.out), k); assert(ok, k + ' wrong result in browser');
+    if (SHOTS && ['sort', 'serial', 'timerdelay'].includes(k)) await p.screenshot({ path: path.join(root, 'screenshots', 'asm-' + k + '.png') }); }
+  // single-stepping highlights the line and updates the registers
+  await p.goto(url + '?p=add16'); await p.waitForSelector('body[data-ready]'); await p.click('#bStep'); await p.click('#bStep');
+  assert((await p.locator('.regs .ch').count()) >= 1, 'step should highlight changed registers');
+  // an error points to its line
+  await p.fill('#src', 'MOV A,#300\nHERE: SJMP HERE'); await p.click('#bAsm'); assert(/Line 1: .*8 bits/.test(await p.locator('#errs').innerText()), 'error message');
+  assert(errs.length === 0, errs.join(' | ')); await ctx.close();
 });
 
 await test('Code panel minimizes and restores', async () => {
