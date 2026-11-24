@@ -229,6 +229,7 @@ export class CPU51 {
     if (this.txBusy > 0) { this.txBusy -= cy; if (this.txBusy <= 0) { this.txBusy = 0; this.sfr[0x98] |= 2; this.onSerial(this.txByte); } }
     if (this.rxQueue.length && (this.sfr[0x98] & 0x10) && !(this.sfr[0x98] & 1)) { this.sbufIn = this.rxQueue.shift(); this.sfr[0x98] |= 1; }
     // external interrupt pins INT0 (P3.2) / INT1 (P3.3): falling edge when ITx = 1, low level otherwise
+    if (!(this.sfr[0xA8] & 5) && !(this.sfr[0x88] & 0x0A)) return;   // INT0/INT1 unused: skip sampling P3 (it is costly in the Studio)
     const p3 = this.readPort(3) & this.sfr[0xB0];
     for (const [pin, ie, it] of [[2, 1, 0], [3, 3, 2]]) { const now = (p3 >> pin) & 1, was = this.lastPins[pin] ?? 1;
       if ((this.sfr[0x88] >> it) & 1 ? (was && !now) : !now) this.sfr[0x88] |= 1 << ie; this.lastPins[pin] = now; }

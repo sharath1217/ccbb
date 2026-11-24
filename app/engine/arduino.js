@@ -3,12 +3,26 @@
 // delay, millis, micros, Serial.print/println, tone/noTone, map, constrain, random, #define,
 // global/local variables, arrays, user functions, pulseIn, and these libraries: DHT, Servo,
 // LiquidCrystal_I2C, Adafruit_SSD1306 (text + basic shapes). Not supported: your own classes, pointers.
-export const LIBS = ['DHT', 'Servo', 'LiquidCrystal_I2C', 'Adafruit_SSD1306', 'OneWire', 'DallasTemperature', 'Adafruit_BMP280', 'BH1750', 'MFRC522', 'Adafruit_NeoPixel'];
+export const LIBS = ['LiquidCrystal', 'DHT', 'Servo', 'LiquidCrystal_I2C', 'Adafruit_SSD1306', 'OneWire', 'DallasTemperature', 'Adafruit_BMP280', 'BH1750', 'MFRC522', 'Adafruit_NeoPixel'];
 const TYPES = '(?:unsigned\\s+)?(?:int|long|float|double|bool|boolean|byte|char|String|uint8_t|uint16_t|uint32_t|int8_t|int16_t|int32_t|word|short|size_t)';
 const FN_TYPES = '(?:void|' + TYPES + ')';
 
 // ---- 8051 (Keil C51 / SDCC) and PIC (MPLAB XC8) register-level C → Arduino-style program ----
 // Ports and pins become calls to __set/__get, delay loops become timed waits, main() runs once with its while(1).
+// Insert a yield at the start of every while/for loop body, matching brackets so conditions like (__get("TF0") == 0) work.
+function yieldLoops(s) {
+  let out = '', i = 0;
+  while (i < s.length) {
+    const m = /\b(while|for)\s*\(/g; m.lastIndex = i; const hit = m.exec(s);
+    if (!hit) { out += s.slice(i); break; }
+    let j = hit.index + hit[0].length, depth = 1; while (j < s.length && depth) { if (s[j] === '(') depth++; else if (s[j] === ')') depth--; j++; }
+    out += s.slice(i, j); let k = j; while (/\s/.test(s[k])) k++;
+    if (s[k] === '{') { out += s.slice(j, k + 1) + ' __spin(0);'; i = k + 1; }
+    else if (s[k] === ';' && hit[1] === 'while') { out += ' { __spin(0); }'; i = k + 1; }
+    else i = j;
+  }
+  return out;
+}
 export function preprocessRegisterC(src, lang) {
   let s = src.replace(/\r/g, '');
   const bits = {};
@@ -23,7 +37,10 @@ export function preprocessRegisterC(src, lang) {
   }
   s = s.replace(/\b__delay_ms\s*\(/g, 'delay(').replace(/\b__delay_us\s*\(/g, 'delayMicroseconds(');
   s = s.replace(/\bbit\b(?=\s+\w)/g, 'bool');
-  const regs = lang === 'c51' ? ['P0', 'P1', 'P2', 'P3'] : ['PORTA', 'PORTB', 'PORTC', 'PORTD', 'PORTE', 'TRISA', 'TRISB', 'TRISC', 'TRISD', 'TRISE'];
+  const isrs = [];
+  s = s.replace(/\b(void\s+(\w+)\s*\(\s*(?:void)?\s*\))\s*interrupt\s+(\d+)(?:\s+using\s+\d+)?/g, (m, head, name, n) => { isrs.push([+n, name]); return head; });
+  const SFR51 = ['TMOD', 'TH0', 'TL0', 'TH1', 'TL1', 'TCON', 'SCON', 'SBUF', 'IE', 'IP', 'PCON', 'TR0', 'TF0', 'TR1', 'TF1', 'TI', 'RI', 'REN', 'EA', 'ET0', 'ET1', 'ES', 'EX0', 'EX1', 'IT0', 'IT1', 'IE0', 'IE1'];
+  const regs = lang === 'c51' ? ['P0', 'P1', 'P2', 'P3', ...SFR51] : ['PORTA', 'PORTB', 'PORTC', 'PORTD', 'PORTE', 'TRISA', 'TRISB', 'TRISC', 'TRISD', 'TRISE'];
   const pinRe = lang === 'c51' ? null : /\b(R[A-E]\d|TRIS[A-E]\d)\b/g;
   const names = [...regs, ...Object.keys(bits)];
   if (pinRe) for (const m of s.matchAll(pinRe)) if (!names.includes(m[1])) names.push(m[1]);
@@ -38,8 +55,9 @@ export function preprocessRegisterC(src, lang) {
   s = s.replace(/__set\("__get\("(\w+)"\)"/g, '__set("$1"');
   // main() with while(1) becomes setup(); loops yield so the page stays responsive
   s = s.replace(/\b(?:void|int)\s+main\s*\(\s*(?:void)?\s*\)/, 'void setup()');
-  s = s.replace(/\bwhile\s*\(([^)]*)\)\s*\{/g, 'while ($1) { __spin(0);');
-  preprocessRegisterC.bits = bits;
+  s = yieldLoops(s);   // while/for bodies (and empty polling loops like while(!TF0);) yield and keep real 8051 speed
+  if (isrs.length) s = s.replace(/void setup\(\)\s*\{/, m => m + ' ' + isrs.map(([n, f]) => `__isr(${n}, ${f});`).join(' '));
+  preprocessRegisterC.bits = bits; preprocessRegisterC.isrs = isrs;
   return s;
 }
 
@@ -57,24 +75,36 @@ export function transpile(src) {
     const ps = params.trim() === 'void' ? '' : params.split(',').map(x => x.trim().split(/\s+/).pop().replace(/[\[\]&*]/g, '')).filter(Boolean).join(', ');
     return `async function ${name}(${ps}) {`;
   });
+  s = s.replace(/\b(millis|micros)\(\)\s*\/\s*(\d+)(?![.\d])/g, '__int($1() / $2)');   // millis() / 1000 is integer division in C
   const INTS = '(?:unsigned\\s+)?(?:int|long|byte|short|word|uint8_t|uint16_t|uint32_t|int8_t|int16_t|int32_t|size_t)';
   s = s.replace(new RegExp('\\b((?:static\\s+)?(?:const\\s+)?' + INTS + ')\\s+([A-Za-z_]\\w*)\\s*=\\s*([^;{}]+);', 'g'), (m, t, n, e) =>
     /^\s*-?\d+\s*$/.test(e) || /,\s*[A-Za-z_]\w*\s*=/.test(e) ? m : `${t} ${n} = __int(${e});`);
   s = s.replace(new RegExp('\\b(?:static\\s+)?(?:const\\s+)?(?:volatile\\s+)?' + TYPES + '\\s+(?=[A-Za-z_])', 'g'), 'let ');
   s = s.replace(/let\s+(\w+)\s*\[\s*\w*\s*\]\s*=\s*\{([^}]*)\}/g, 'let $1 = [$2]');
+  s = s.replace(/let\s+(\w+)\s*\[\s*\w*\s*\]\s*=\s*"((?:[^"\\]|\\.)*)"/g, (m, n, str) => `let ${n} = [${[...(() => { try { return JSON.parse('"' + str + '"'); } catch { return str; } })()].map(c => c.charCodeAt(0)).concat(0).join(', ')}]`);   // char msg[] = "VTU" → bytes + 0
   s = s.replace(/let\s+(\w+)\s*\[\s*(\w+)\s*\]\s*;/g, 'let $1 = new Array($2).fill(0);');
   s = s.replace(/\(\s*(?:int|long|float|byte)\s*\)/g, '');           // casts
   s = s.replace(/(\d+(?:\.\d+)?)[uU]?[lL]\b/g, '$1');                     // 1000UL
+  const asyncObjs = [...s.matchAll(/let\s+(\w+)\s*=\s*new\s+LiquidCrystal\(/g)].map(m => m[1]);
+  for (const o of asyncObjs) s = s.replace(new RegExp('(?<![\\w.])' + o + '\\.(begin|clear|home|setCursor|print|write|display|noDisplay)\\s*\\(', 'g'), `await ${o}.$1(`);
   const calls = ['delay', 'delayMicroseconds', '__spin', ...fnNames.filter(n => n !== 'setup' && n !== 'loop')];
   for (const f of calls) s = s.replace(new RegExp('(?<!function\\s)(?<![\\w.])' + f + '\\s*\\(', 'g'), `await ${f}(`);
   return s;
 }
 
+// printf-style formatting: %d %i %u %ld %x %X %c %s %f %.2f %% (width and zero padding supported)
+export function cfmt(fmt, a) { let i = 0;
+  return String(fmt).replace(/%([-0]?)(\d*)(?:\.(\d+))?(l?)([diuxXcsf%])/g, (m, flag, w, prec, l, t) => {
+    if (t === '%') return '%'; let v = a[i++]; if (v && v.__float !== undefined) v = v.__float; let o;
+    if (t === 'd' || t === 'i' || t === 'u') o = String(Math.trunc(+v)); else if (t === 'x') o = (Math.trunc(+v) >>> 0).toString(16); else if (t === 'X') o = (Math.trunc(+v) >>> 0).toString(16).toUpperCase();
+    else if (t === 'c') o = typeof v === 'number' ? String.fromCharCode(v) : String(v)[0]; else if (t === 's') o = String(v); else o = (+v).toFixed(prec === undefined ? 6 : +prec);
+    w = +w || 0; return flag === '-' ? o.padEnd(w) : o.padStart(w, flag === '0' ? '0' : ' '); }); }
+
 export class Stop extends Error {}
 
 // io: { pinMode, digitalWrite, analogWrite, digitalRead, analogRead, serial, tone, noTone, onChange }
 export function createRunner(io, { speed = 1, now = () => performance.now(), sleep, board } = {}) {
-  let stopped = false, t0 = 0, lastYield = 0, spinDebt = 0;
+  let stopped = false, t0 = 0, lastYield = 0, spinDebt = 0, inIsr = false; const isrTable = {};
   const realSleep = sleep || (ms => new Promise(r => setTimeout(r, ms)));
   const delay = async ms => { if (stopped) throw new Stop(); await realSleep(Math.max(0, ms) / speed); if (stopped) throw new Stop(); };
   const pin = p => String(p);
@@ -107,7 +137,9 @@ export function createRunner(io, { speed = 1, now = () => performance.now(), sle
       drawRect(x, y, w, h, c = 1) { this.ops.push(['rect', x, y, w, h, c, 0]); } fillRect(x, y, w, h, c = 1) { this.ops.push(['rect', x, y, w, h, c, 1]); }
       drawCircle(x, y, r, c = 1) { this.ops.push(['circle', x, y, r, c, 0]); } fillCircle(x, y, r, c = 1) { this.ops.push(['circle', x, y, r, c, 1]); } },
     ...(board?.consts || {}),
-    __spin: async n => { if (stopped) throw new Stop(); spinDebt += n * 0.000784 / speed;   // busy-wait time, slept in chunks for accurate timing
+    __isr: (n, f) => { isrTable[n] = f; },
+    __spin: async n => { if (stopped) throw new Stop(); spinDebt += n * 0.000784 / speed + (io.takeDebt ? io.takeDebt() / speed : 0);
+      const v = io.pendingIrq?.(); if (v !== undefined && v !== null && isrTable[v] && !inIsr) { inIsr = true; try { await isrTable[v](); } finally { inIsr = false; io.retIrq?.(v); } }   // busy-wait time, slept in chunks for accurate timing
       if (spinDebt >= 8) { const d = spinDebt; spinDebt = 0; await realSleep(d); lastYield = now(); } else if (now() - lastYield > 12) { lastYield = now(); await realSleep(0); } if (stopped) throw new Stop(); },
     __set: (r, v) => io.regSet?.(r, v), __get: r => io.regGet ? io.regGet(r) : 0,
     SPI: { begin: () => {}, end: () => {} }, NEO_GRB: 0, NEO_RGB: 1, NEO_KHZ800: 0,
@@ -124,6 +156,19 @@ export function createRunner(io, { speed = 1, now = () => performance.now(), sle
       begin() {} show() { io.lib?.neopixel?.(this.pin, this.px.map(c => c.map(v => Math.round(v * this.br / 255)))); } clear() { this.px = this.px.map(() => [0, 0, 0]); }
       setBrightness(b) { this.br = b; } numPixels() { return this.n; } Color(r, g, b) { return (r << 16) | (g << 8) | b; }
       setPixelColor(i, r, g, b) { if (i < 0 || i >= this.n) return; this.px[i] = g === undefined ? [(r >> 16) & 255, (r >> 8) & 255, r & 255] : [r, g, b]; } },
+    printf: (fmt, ...a) => io.serial(cfmt(fmt, a)), sprintf: (buf, fmt, ...a) => cfmt(fmt, a), putchar: c => io.serial(String.fromCharCode(c)),
+    LiquidCrystal: class {   // HD44780 in 4-bit mode, driving real pins so the LCD on the board decodes it
+      constructor(rs, en, d4, d5, d6, d7) { this.p = { rs: pin(rs), en: pin(en), d: [d4, d5, d6, d7].map(pin) }; }
+      async pulse() { io.digitalWrite(this.p.en, 0); io.digitalWrite(this.p.en, 1); io.digitalWrite(this.p.en, 0); await delay(0.05); }
+      async nib(v) { this.p.d.forEach((q, i) => io.digitalWrite(q, (v >> i) & 1)); await this.pulse(); }
+      async send(v, rs) { io.digitalWrite(this.p.rs, rs); await this.nib(v >> 4); await this.nib(v & 15); }
+      async begin(cols = 16, rows = 2) { for (const q of [this.p.rs, this.p.en, ...this.p.d]) io.pinMode(q, 'OUTPUT'); io.digitalWrite(this.p.rs, 0);
+        for (const v of [3, 3, 3, 2]) await this.nib(v); for (const c of [0x28, 0x0C, 0x01, 0x06]) await this.send(c, 0); this.rows = rows; }
+      async clear() { await this.send(0x01, 0); await delay(2); } async home() { await this.send(0x02, 0); await delay(2); }
+      async setCursor(c, r) { await this.send(0x80 | (c + [0, 0x40, 0x14, 0x54][r]), 0); }
+      async print(v, d) { if (v && v.__float !== undefined) { v = v.__float; d = d ?? 2; } const t = typeof v !== 'number' ? String(v) : d !== undefined && ![2, 8, 10, 16].includes(d) ? v.toFixed(d) : Number.isInteger(v) ? String(v) : v.toFixed(2);
+        for (const ch of t) await this.send(ch.charCodeAt(0), 1); }
+      async write(c) { await this.send(c, 1); } async display() { await this.send(0x0C, 0); } async noDisplay() { await this.send(0x08, 0); } },
     __f: v => ({ __float: v }), __int: v => typeof v === 'number' ? Math.trunc(v) : v, isnan: Number.isNaN, isinf: v => !isFinite(v), sq: x => x * x,
     pinMode: (p, m) => io.pinMode(pin(p), m),
     digitalWrite: (p, v) => io.digitalWrite(pin(p), v ? 1 : 0),

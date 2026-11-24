@@ -1,4 +1,5 @@
-import { simulate, fmt, PIN_LIST, isMcu } from '../engine/circuit.js';
+import { simulate, fmt, PIN_LIST, isMcu, stepperUpdate, lcdController, lcdText } from '../engine/circuit.js';
+import { assemble, CPU51, SFR as SFR51, BITS as BITS51 } from '../engine/cpu8051.js';
 import { BOARDS } from '../engine/boards.js';
 import { createRunner } from '../engine/arduino.js';
 import { CATALOG, BY_TYPE, PROJECTS } from './catalog.js';
@@ -299,6 +300,7 @@ function runSim(dt = 0) {
     if (p.type === 'seg7' || p.type === 'bargraph') el.values = r.values || [];
     if (p.type === 'motor') el.setAttribute('rpm', r.rpm || 0);
     if (p.type === 'servo') el.angle = p.state?.angle ?? 90;
+    if (p.type === 'stepper') { el.setAttribute('angle', ((p.state?.steps || 0) * 360 / 2048 * 8).toFixed(1)); el.setAttribute('coils', (p.state?.coils || [0, 0, 0, 0]).join('')); }
     if (p.type === 'psu') { el.setAttribute('amps', Math.abs(S.sim.parts[p.id] ? (S.sim.pinCurrent[p.id + ':+'] || 0) : 0)); el.setAttribute('cc', p.state?.cc ? 1 : 0); el.setAttribute('volts', S.sim.voltAt(p.id, '+') - S.sim.voltAt(p.id, '-')); }
     if (isMcu(p.type)) { const B = BOARDS[p.type], v = S.io.mcu === p.id ? S.io.pins[B.builtin] : null, lit = !!(v && v.mode === 'OUTPUT' && (B.builtinActiveLow ? v.v < 1 : v.v > B.vcc / 2));
       el.led13 = lit; el.led1 = lit; if (el.tagName.startsWith('CB-')) el.setAttribute('led', lit ? 1 : 0); }
@@ -314,6 +316,8 @@ let lastFrame = performance.now(), envTick = 0;
 (function animate() {
   flowOffset -= 1;
   const now = performance.now(), frame = Math.min(0.05, (now - lastFrame) / 1000); lastFrame = now;
+  // run the 8051 first so everything it outputs this frame is ready before the scopes sample
+  if (S.asmRun && !S.asmRun.cpu.halted) { const r = S.asmRun; try { r.cpu.run(Math.max(1, Math.round(frame * r.cpu.xtal / 12))); } catch (e) { showErr('8051 stopped: ' + e.message); r.cpu.halted = true; } r.flush(); }
   if (isDynamic() && S.ready) {                     // real-time transient simulation (capacitors, 555, pulse sensor)
     const steps = Math.min(40, Math.max(1, Math.ceil(frame / 0.001))), h = frame / steps;
     for (let i = 0; i < steps; i++) { simT += h; S.sim = simulate(envParts(), S.wires, S.io, { dt: h, t: simT }); sampleScopes(); }
@@ -335,7 +339,10 @@ function sampleScopes() {
   if (!S.sim) return;
   for (const p of S.parts.filter(q => q.type === 'scope')) {
     const g = S.sim.voltAt(p.id, 'GND'), buf = ((p.state ??= {}).buf ??= { ch1: [], ch2: [] }), keep = (p.props.tdiv || 0.2) * 12;
-    for (const ch of ['ch1', 'ch2']) { const pin = ch.toUpperCase(); buf[ch].push([simT, (pwmOn(p.id + ':' + pin)?.avg ?? S.sim.voltAt(p.id, pin)) - g]);
+    for (const ch of ['ch1', 'ch2']) { const pin = ch.toUpperCase();
+      const dac = S.parts.find(q => q.type === 'dac0808' && q.state?.hist?.length && S.sim.sameNode(q.id + ':OUT', p.id + ':' + pin));
+      if (dac) { const from = buf[ch].at(-1)?.[0] ?? -1; for (const [t, v] of dac.state.hist) if (t > from && t <= simT) buf[ch].push([t, v]); }
+      buf[ch].push([simT, (pwmOn(p.id + ':' + pin)?.avg ?? S.sim.voltAt(p.id, pin)) - g]);
       while (buf[ch].length && buf[ch][0][0] < simT - keep) buf[ch].shift(); if (buf[ch].length > 4000) buf[ch].splice(0, buf[ch].length - 4000); }
   }
 }
@@ -427,7 +434,7 @@ const io = {
   pinMode(pin, mode) { S.io.pins[pin] = { mode, v: 0 }; runSim(); },
   digitalWrite(pin, v) { const B = board(), s = S.io.pins[pin] || { mode: 'INPUT' };
     if (s.mode !== 'OUTPUT') S.io.pins[pin] = { mode: v ? 'INPUT_PULLUP' : 'INPUT' };
-    else S.io.pins[pin] = { mode: 'OUTPUT', v: v ? B.vcc : 0 }; runSim(); },
+    else S.io.pins[pin] = { mode: 'OUTPUT', v: v ? B.vcc : 0 }; pinsChanged(); runSim(); },
   analogWrite(pin, val) { const B = board(), pwm = B.pwm === 'all' || B.pwm.includes(pin);
     S.io.pins[pin] = pwm && val > 0 && val < 255 ? { mode: 'OUTPUT', v: B.vcc, vhigh: B.vcc, duty: val / 255 } : { mode: 'OUTPUT', v: (pwm ? val >= 255 : val >= 128) ? B.vcc : 0 };
     if (!pwm && !warnedPwm.has(pin)) { warnedPwm.add(pin); serial(`[sim] Pin ${pin} has no PWM (~). analogWrite acts like on/off. PWM pins: ${B.pwm.join(', ')}.\n`); } runSim(); },
@@ -464,6 +471,13 @@ function i2cPart(type, sda, scl) { const m = mcuPart(), B = board(); return S.pa
 // 8051 / PIC registers: ports P0–P3 / PORTA–E, TRISx and single pins
 function regIo(B, bits) {
   const latch = {}, tris = {}, m = mcuPart();
+  // 8051 C: timers, serial and interrupts use the same peripheral model as the assembly emulator,
+  // clocked by a virtual 8051 time (each register access ≈ 4 µs of real 8051 time, never behind the wall clock)
+  const model = B.lang === 'c51' ? new CPU51(new Uint8Array(65536), { onSerial: b => serial(String.fromCharCode(b)) }) : null;
+  const wall0 = performance.now(); let vclock = 0, lastV = 0, debt = 0;
+  const tick = () => { vclock = Math.max(vclock + 4e-6, (performance.now() - wall0) / 1000); debt += 0.004; };
+  const advance = () => { if (!model) return; const cy = Math.floor((vclock - lastV) * B.xtal51 / 12); if (cy > 0) { model.peripherals(Math.min(cy, 2e6)); lastV += cy * 12 / B.xtal51; } };
+  S.vclock = () => vclock;
   const readPin = pin => (S.sim && S.sim.voltAt(m.id, pin) > B.vcc / 2 ? 1 : 0);
   const setPin = (pin, val, out = true) => { if (B.lang === 'c51') S.io.pins[pin] = val ? { mode: B.openDrain.includes(pin) ? 'OPEN' : 'WEAK_HIGH' } : { mode: 'OUTPUT', v: 0 };
     else S.io.pins[pin] = out ? { mode: 'OUTPUT', v: val ? B.vcc : 0 } : { mode: 'INPUT' }; };
@@ -471,20 +485,47 @@ function regIo(B, bits) {
   if (B.lang === 'c51') for (const P of Object.keys(B.ports)) { latch[P] = 255; refresh(P); }
   const setBit = (P, b, v) => { latch[P] = ((latch[P] ?? (B.lang === 'c51' ? 255 : 0)) & ~(1 << b)) | ((v ? 1 : 0) << b); refresh(P); };
   return {
-    regSet(r, v) { v = Number(v) | 0; let x;
+    takeDebt() { const d = debt; debt = 0; return d; },
+    pendingIrq() { if (!model) return null; vclock = Math.max(vclock, (performance.now() - wall0) / 1000); advance(); const ie = model.sfr[0xA8], tc = model.sfr[0x88], sc = model.sfr[0x98]; if (!(ie & 0x80)) return null;
+      const src = [[ie & 1, tc & 2, 0, 1], [ie & 2, tc & 0x20, 1, 5], [ie & 4, tc & 8, 2, 3], [ie & 8, tc & 0x80, 3, 7], [ie & 16, sc & 3, 4, null]];
+      for (const [en, fl, n, bit] of src) if (en && fl) { if (bit === 5 || bit === 7) model.sfr[0x88] &= ~(1 << bit); return n; } return null; },
+    regSet(r, v) { v = typeof v === 'string' ? v.charCodeAt(0) || 0 : Number(v) | 0; let x; tick();
+      if (model && r in SFR51 && !/^P[0-3]$/.test(r)) { advance(); model.wr(SFR51[r], v); return; }
+      if (model && r in BITS51) { advance(); model.wrBit(BITS51[r], v ? 1 : 0); return; }
       if (B.ports[r]) { latch[r] = v & 255; refresh(r); }
       else if (bits[r]) { const [P, b] = bits[r].split('.'); setBit(P, +b, v); }
       else if ((x = /^TRIS([A-E])$/.exec(r))) { tris['PORT' + x[1]] = v & 255; refresh('PORT' + x[1]); }
       else if ((x = /^TRIS([A-E])(\d)$/.exec(r))) { const P = 'PORT' + x[1]; tris[P] = ((tris[P] ?? 255) & ~(1 << x[2])) | ((v ? 1 : 0) << x[2]); refresh(P); }
       else if ((x = /^R([A-E])(\d)$/.exec(r))) setBit('PORT' + x[1], +x[2], v);
-      runSim(); },
-    regGet(r) { let x;
+      pinsChanged(); runSim(); },
+    regGet(r) { let x; tick();
+      if (model && r in SFR51 && !/^P[0-3]$/.test(r)) { advance(); return model.rd(SFR51[r]); }
+      if (model && r in BITS51) { advance(); return model.rdBit(BITS51[r]); }
       if (B.ports[r]) return B.ports[r].reduce((a, pin, i) => a | (readPin(pin) << i), 0);
       if (bits[r]) { const [P, b] = bits[r].split('.'); return readPin(B.ports[P][+b]); }
       if ((x = /^TRIS([A-E])$/.exec(r))) return tris['PORT' + x[1]] ?? 255;
       if ((x = /^R([A-E])(\d)$/.exec(r))) return readPin(B.ports['PORT' + x[1]][+x[2]]);
       return 0; },
   };
+}
+// Logic level of a part pin straight from the microcontroller pin it is wired to (no full simulation needed),
+// so fast protocols (LCD strobes, stepper sequences, DAC ramps) are followed exactly.
+function logicLevel(partId, pin) {
+  const m = mcuPart(), k = partId + ':' + pin;
+  if (m && S.sim && S.io.mcu === m.id) { const B = BOARDS[m.type], cache = (S.sim.__lvl ??= new Map());
+    let ios = cache.get(k); if (!ios) cache.set(k, ios = B.io.filter(io => S.sim.sameNode(k, m.id + ':' + io)));   // wiring only changes when the sim is rebuilt
+    for (const io of ios) { const st = S.io.pins[io]; if (st && st.mode === 'OUTPUT') return st.v > B.vcc / 2 ? 1 : 0; if (st && st.mode === 'WEAK_HIGH') return 1; if (st && st.mode === 'OPEN') break; } }
+  return S.sim && S.sim.nodeVoltage(k) - (S.sim.nodeVoltage(partId + ':' + ({ lcdpar: 'VSS', dac0808: 'GND', stepper: 'GND' })[S.parts.find(q => q.id === partId)?.type] || 0)) > 2.4 ? 1 : 0;
+}
+const nowSim = () => S.asmRun ? S.asmRun.t0 + S.asmRun.cpu.time : S.vclock && S.runner ? S.runT0 + S.vclock() : simT;
+function pinsChanged() {
+  for (const p of S.parts) {
+    if (p.type === 'lcdpar') { p.state ??= {}; const lv = q => logicLevel(p.id, q);
+      if (lcdController(p.state, { e: lv('E'), rs: lv('RS'), d: [0, 1, 2, 3, 4, 5, 6, 7].map(b => lv('D' + b)) })) els.get(p.id).el.text = lcdText(p.state); }
+    if (p.type === 'stepper') { p.state ??= {}; stepperUpdate(p.state, ['IN1', 'IN2', 'IN3', 'IN4'].map(q => logicLevel(p.id, q))); }
+    if (p.type === 'dac0808') { p.state ??= {}; const code = [0, 1, 2, 3, 4, 5, 6, 7].reduce((a, b) => a | (logicLevel(p.id, 'D' + b) << b), 0);
+      if (code !== p.state.lastCode) { p.state.lastCode = code; (p.state.hist ??= []).push([nowSim(), 5 * code / 256]); if (p.state.hist.length > 20000) p.state.hist.splice(0, 5000); } }
+  }
 }
 function drawOled(el, ops) {
   const cv = document.createElement('canvas'); cv.width = 128; cv.height = 64; const g = cv.getContext('2d');
@@ -512,6 +553,8 @@ $('btnRun').onclick = async () => {
   const B = BOARDS[m.type];
   S.io = { mcu: m.id, pins: {} }; warnedPwm.clear(); serial('');
   let src = $('src').value, ioB = wrapIo(B);
+  if (B.lang === 'c51' && /^\s*(?:\w+:\s*)?(ORG|MOV|SJMP|LJMP|AJMP|SETB|CLR|ACALL|LCALL|CPL)\b/mi.test(src) && !/\bvoid\s+main\b/.test(src)) return runAsm(B, m, src);
+  S.runT0 = simT;
   if (B.lang) { src = preprocessRegisterC(src, B.lang); ioB = { ...ioB, ...regIo(B, preprocessRegisterC.bits) }; }
   const r = S.runner = createRunner(ioB, { board: B });
   try { r.compile(src); } catch (e) { showErr('Code error: ' + e.message + '\nTip: check brackets { } and semicolons ;'); return; }
@@ -520,7 +563,20 @@ $('btnRun').onclick = async () => {
   if (S.runner === r) setRunning(false);
 };
 $('btnStop').onclick = () => stopCode();
-function stopCode() { if (S.runner) { S.runner.stop(); S.runner = null; } S.io = { pins: {} }; setRunning(false); changed(); }
+function stopCode() { if (S.runner) { S.runner.stop(); S.runner = null; } S.asmRun = null; S.io = { pins: {} }; setRunning(false); changed(); }
+// 8051 assembly in the Studio: the instruction-level CPU drives the circuit through its port pins
+function runAsm(B, m, src) {
+  const a = assemble(src);
+  if (a.errors.length) { showErr('Assembly errors:\n' + a.errors.map(e => `Line ${e.line}: ${e.msg}`).join('\n')); return; }
+  const P = n => B.ports['P' + n]; let dirty = false, lastSolve = -1;
+  const apply = (n, v) => P(n).forEach((pin, i) => { S.io.pins[pin] = (v >> i) & 1 ? { mode: B.openDrain.includes(pin) ? 'OPEN' : 'WEAK_HIGH' } : { mode: 'OUTPUT', v: 0 }; });
+  const cpu = new CPU51(a.code, { xtal: B.xtal51,
+    readPort: n => { if (dirty && cpu.time - lastSolve > 20e-6) { runSim(); dirty = false; lastSolve = cpu.time; } return P(n).reduce((acc, pin, i) => acc | ((S.sim && S.sim.voltAt(m.id, pin) > 2.5 ? 1 : 0) << i), 0); },
+    onPortWrite: (n, v) => { apply(n, v); dirty = true; pinsChanged(); },
+    onSerial: b => serial(String.fromCharCode(b)) });
+  for (const n of [0, 1, 2, 3]) apply(n, 0xFF);
+  S.asmRun = { cpu, t0: simT, flush: () => { if (dirty) { runSim(); dirty = false; } } }; setRunning(true); runSim();
+}
 function setRunning(on) { $('btnRun').disabled = on; $('btnStop').disabled = !on; const p = $('simState'); p.textContent = on ? '● Running code' : '● Live'; p.classList.toggle('run', on); }
 function showErr(t) { const e = $('err'); e.textContent = t; e.hidden = false; S.lastError = t; }
 function updateBoardLabel() { const m = mcuPart(); $('boardSel').innerHTML = m ? `<option>Code runs on: ${BOARDS[m.type].name} (${BOARDS[m.type].chip})</option>` : '<option>Add a microcontroller to run code</option>'; }

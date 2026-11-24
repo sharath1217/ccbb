@@ -210,3 +210,13 @@ const TOOL_ART = {
 };
 svgPart('cb-tool', { w: 60, h: 74, pins: [], props: ['kind', 'on', 'mode'],
   draw: el => `<g>${(TOOL_ART[el.getAttribute('kind')] || (() => ''))(el)}</g>` });
+
+// Stepper motor 28BYJ-48 with its ULN2003 driver board (4 LEDs show the energised coils)
+svgPart('cb-stepper', { w: 150, h: 128, props: ['angle', 'coils'],
+  pins: ['IN1', 'IN2', 'IN3', 'IN4', 'VCC', 'GND'].map((name, i) => ({ name, x: 22 + i * 9.6, y: 128 })),
+  draw: el => { const a = +(el.getAttribute('angle') || 0), coils = (el.getAttribute('coils') || '0000').split('');
+    return `<circle cx="104" cy="44" r="40" fill="#cbd5e1" stroke="#64748b" stroke-width="2"/><circle cx="104" cy="44" r="12" fill="#e2e8f0" stroke="#64748b"/>
+      <g transform="rotate(${a} 104 44)"><rect x="101" y="8" width="6" height="36" rx="3" fill="#f59e0b"/></g><rect x="84" y="80" width="40" height="10" fill="#2563eb"/>
+      <rect x="6" y="66" width="74" height="54" rx="3" fill="#166534"/><rect x="22" y="72" width="34" height="16" rx="2" fill="#111"/>${txt(39, 83, 'ULN2003', 5.5)}
+      ${coils.map((c, i) => `<circle cx="${16 + i * 16}" cy="98" r="4" fill="${c === '1' ? '#ef4444' : '#7f1d1d'}" ${c === '1' ? 'style="filter:drop-shadow(0 0 3px #ef4444)"' : ''}/>`).join('')}
+      ${['IN1', 'IN2', 'IN3', 'IN4', '+', '−'].map((n, i) => leg(22 + i * 9.6, 112, 128) + txt(22 + i * 9.6, 110, n, 3.6, '#fff')).join('')}`; } });

@@ -81,7 +81,7 @@ export const BOARDS = {
     pwm: 'all', i2c: { SDA: 'GP4', SCL: 'GP5' }, builtin: 'LED', maxPin: 0.012,
     pin: v => v === 'LED' || v === 99 ? 'LED' : 'GP' + v, consts: { A0: 26, A1: 27, A2: 28, LED_BUILTIN: 'LED' } },
   // ---- classic microcontrollers programmed in register-level C (Keil C51 / MPLAB XC8) ----
-  at89s52: { name: '8051 AT89S52 (DIP-40)', chip: 'AT89S52', vcc: 5, lang: 'c51', external: { vcc: '40', gnd: '20', min: 4.0 }, adcBits: 0, adcRef: 5,
+  at89s52: { name: '8051 AT89S52 (DIP-40)', chip: 'AT89S52', vcc: 5, lang: 'c51', xtal51: 11.0592e6, external: { vcc: '40', gnd: '20', min: 4.0 }, adcBits: 0, adcRef: 5,
     power: {}, gnd: ['20'], ties: [],
     io: [...range(1, 8), ...range(10, 17), ...range(21, 28), ...range(32, 39)].map(S), analog: [], pwm: [], i2c: { SDA: '-', SCL: '-' }, builtin: '-', maxPin: 0.015,
     ports: { P1: range(1, 8).map(S), P3: range(10, 17).map(S), P2: range(21, 28).map(S), P0: range(32, 39).reverse().map(S) }, openDrain: range(32, 39).map(S),

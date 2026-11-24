@@ -99,6 +99,10 @@ export const CATALOG = [
   { type: 'ring', tag: 'wokwi-led-ring', attrs: { pixels: 12 }, name: 'NeoPixel ring (12)', group: 'Output', props: {}, desc: '12 addressable RGB LEDs · Adafruit_NeoPixel', price: [250, 400] },
   { type: 'lcd2004', tag: 'wokwi-lcd2004', attrs: { pins: 'i2c' }, name: 'LCD 20×4 (I2C)', group: 'Output', props: {}, desc: 'Address 0x27 · LiquidCrystal_I2C(0x27, 20, 4)', price: [350, 500] },
   { type: 'relaymod', tag: 'cb-module', attrs: { label: 'Relay module', pins: 'VCC,GND,IN,COM,NO,NC', color: '#1d4ed8' }, name: 'Relay module (1-ch)', group: 'Output', props: {}, desc: 'Transistor + diode built in · IN LOW = ON', price: [50, 80] },
+  { type: 'lcdpar', tag: 'wokwi-lcd1602', name: 'LCD 16×2 (parallel)', group: 'Output', props: {}, desc: 'HD44780 · 8-bit or 4-bit bus · 8051 / LiquidCrystal', price: [120, 180] },
+  { type: 'dac0808', tag: 'cb-module', attrs: { label: 'DAC0808', pins: 'D7,D6,D5,D4,D3,D2,D1,D0,VCC,GND,OUT', color: '#1e3a8a' }, name: 'DAC0808 module', group: 'Output', props: {}, desc: '8-bit digital → analog · OUT = 5 V × code / 256', price: [60, 120] },
+  { type: 'adc0804', tag: 'cb-module', attrs: { label: 'ADC0804', pins: 'VIN,VCC,GND,D7,D6,D5,D4,D3,D2,D1,D0', color: '#065f46' }, name: 'ADC0804 module', group: 'Sensors', props: {}, desc: 'Analog → 8-bit · code = 255 × VIN / 5 V', price: [80, 150] },
+  { type: 'stepper', tag: 'cb-stepper', name: 'Stepper motor + ULN2003', group: 'Output', props: {}, desc: '28BYJ-48 · 2048 full steps per turn · 5 V', price: [150, 250] },
   // ---- real world: drag these next to sensors to test them like in real life ----
   { type: 'lighter', tag: 'cb-tool', attrs: { kind: 'lighter' }, name: 'Lighter', group: 'Real world', props: { mode: 'off' }, desc: 'Heat + flame + light. "Gas only" leaks butane.', controls: [M('Lighter', 'mode', ['off', 'gas', 'lit'])] },
   { type: 'fan', tag: 'cb-tool', attrs: { kind: 'fan' }, name: 'Fan', group: 'Real world', props: { on: true }, desc: 'Blows heat and gas away, dries air', controls: [T('Fan', 'on')] },
@@ -296,4 +300,189 @@ void loop() {
     wires: [W('bat1:+', 'bb1:TP1'), W('bat1:-', 'bb1:TN1'), W('bb1:TP2', 'bb1:BP2'), W('bb1:TN3', 'bb1:BN3'), W('bb1:J15', 'bb1:BP15'), W('bb1:J16', 'bb1:BN16'),
       W('r1:1', 'bb1:A12'), W('r1:2', 'led1:A'), W('led1:C', 'bb1:BN22')],
     code: `// PIC16F877A blink (MPLAB XC8). RB0 is pin 33. TRISB = 0 makes PORTB outputs.\n#include <xc.h>\n#define _XTAL_FREQ 4000000\n\nvoid main(void) {\n  TRISB = 0x00;          // all PORTB pins are outputs\n  while (1) {\n    RB0 = 1;  __delay_ms(500);\n    RB0 = 0;  __delay_ms(500);\n  }\n}` },
+  s51stepper: { name: '18 · 8051: stepper motor (Keil C)', parts: [
+      { id: 'ps1', type: 'battery', x: 40, y: 140, props: { volts: 5, rint: 0.05 } },
+      { id: 'bb1', type: 'breadboard', x: 200, y: 60, props: {} },
+      { id: 'mcu1', type: 'at89s52', x: 0, y: 0, props: {}, at: { bb: 'bb1', pin: '1', hole: 'F5' } },
+      { id: 'stp1', type: 'stepper', x: 640, y: 300, props: {} }],
+    wires: [W('ps1:+', 'bb1:TP1'), W('ps1:-', 'bb1:TN1'), W('bb1:TP2', 'bb1:BP2'), W('bb1:TN3', 'bb1:BN3'), W('bb1:A5', 'bb1:TP5'), W('bb1:J24', 'bb1:BN24'), W('stp1:IN1', 'bb1:A24'), W('stp1:IN2', 'bb1:A23'), W('stp1:IN3', 'bb1:A22'), W('stp1:IN4', 'bb1:A21'), W('stp1:VCC', 'bb1:TP28'), W('stp1:GND', 'bb1:TN28')],
+    code: `// 8051 stepper motor control (VTU interfacing experiment)
+// P2.0–P2.3 drive the ULN2003 inputs IN1–IN4. Full-step sequence 0x03, 0x06, 0x0C, 0x09.
+// Swap the sequence order to turn anticlockwise.
+#include <reg51.h>
+
+void delay(unsigned int ms) {
+  unsigned int i, j;
+  for (i = 0; i < ms; i++)
+    for (j = 0; j < 1275; j++);
+}
+
+void main(void) {
+  while (1) {
+    P2 = 0x03; delay(5);
+    P2 = 0x06; delay(5);
+    P2 = 0x0C; delay(5);
+    P2 = 0x09; delay(5);
+  }
+}` },
+  s51dac: { name: '19 · 8051: DAC0808 triangle wave (assembly)', parts: [
+      { id: 'ps1', type: 'battery', x: 40, y: 140, props: { volts: 5, rint: 0.05 } },
+      { id: 'bb1', type: 'breadboard', x: 200, y: 60, props: {} },
+      { id: 'mcu1', type: 'at89s52', x: 0, y: 0, props: {}, at: { bb: 'bb1', pin: '1', hole: 'F5' } },
+      { id: 'dac1', type: 'dac0808', x: 620, y: 300, props: {} },
+      { id: 'sc1', type: 'scope', x: 760, y: 40, props: { tdiv: 0.001, vdiv: 1 } }],
+    wires: [W('ps1:+', 'bb1:TP1'), W('ps1:-', 'bb1:TN1'), W('bb1:TP2', 'bb1:BP2'), W('bb1:TN3', 'bb1:BN3'), W('bb1:A5', 'bb1:TP5'), W('bb1:J24', 'bb1:BN24'), W('dac1:D0', 'bb1:A24'), W('dac1:D1', 'bb1:A23'), W('dac1:D2', 'bb1:A22'), W('dac1:D3', 'bb1:A21'), W('dac1:D4', 'bb1:A20'), W('dac1:D5', 'bb1:A19'), W('dac1:D6', 'bb1:A18'), W('dac1:D7', 'bb1:A17'), W('dac1:VCC', 'bb1:TP27'), W('dac1:GND', 'bb1:TN27'), W('sc1:CH1', 'dac1:OUT'), W('sc1:GND', 'bb1:TN29')],
+    code: `; 8051 + DAC0808: triangle wave on the oscilloscope (VTU interfacing experiment)
+; P2 drives the DAC inputs. Count up 00H..FFH, then down to 00H, forever.
+        ORG  0000H
+UP:     MOV  A, #00H
+RISE:   MOV  P2, A
+        INC  A
+        CJNE A, #0FFH, RISE
+FALL:   MOV  P2, A
+        DEC  A
+        JNZ  FALL
+        SJMP UP
+        END` },
+  s51lcd: { name: '20 · 8051: 16×2 LCD message (Keil C, 8-bit bus)', parts: [
+      { id: 'ps1', type: 'battery', x: 40, y: 140, props: { volts: 5, rint: 0.05 } },
+      { id: 'bb1', type: 'breadboard', x: 200, y: 60, props: {} },
+      { id: 'mcu1', type: 'at89s52', x: 0, y: 0, props: {}, at: { bb: 'bb1', pin: '1', hole: 'F5' } },
+      { id: 'lcd1', type: 'lcdpar', x: 300, y: 330, props: {} }],
+    wires: [W('ps1:+', 'bb1:TP1'), W('ps1:-', 'bb1:TN1'), W('bb1:TP2', 'bb1:BP2'), W('bb1:TN3', 'bb1:BN3'), W('bb1:A5', 'bb1:TP5'), W('bb1:J24', 'bb1:BN24'), W('lcd1:D0', 'bb1:A24'), W('lcd1:D1', 'bb1:A23'), W('lcd1:D2', 'bb1:A22'), W('lcd1:D3', 'bb1:A21'), W('lcd1:D4', 'bb1:A20'), W('lcd1:D5', 'bb1:A19'), W('lcd1:D6', 'bb1:A18'), W('lcd1:D7', 'bb1:A17'), W('lcd1:RS', 'bb1:J5'), W('lcd1:RW', 'bb1:J6'), W('lcd1:E', 'bb1:J7'), W('lcd1:VSS', 'bb1:BN14'), W('lcd1:VDD', 'bb1:BP15'), W('lcd1:V0', 'bb1:BN16')],
+    code: `// 8051 + 16x2 LCD, 8-bit mode (VTU interfacing experiment)
+// Data bus D0–D7 on P2, RS = P1.0, RW = P1.1, EN = P1.2
+#include <reg51.h>
+sbit RS = P1^0;
+sbit RW = P1^1;
+sbit EN = P1^2;
+
+void delay(unsigned int ms) {
+  unsigned int i, j;
+  for (i = 0; i < ms; i++)
+    for (j = 0; j < 1275; j++);
+}
+
+void lcd_cmd(unsigned char c) { P2 = c; RS = 0; RW = 0; EN = 1; delay(1); EN = 0; delay(2); }
+void lcd_data(unsigned char d) { P2 = d; RS = 1; RW = 0; EN = 1; delay(1); EN = 0; delay(2); }
+
+void main(void) {
+  unsigned char i;
+  unsigned char line1[] = "VTU 8051 LAB";
+  unsigned char line2[] = "LCD INTERFACE";
+  lcd_cmd(0x38);   // 8-bit, 2 lines, 5x7
+  lcd_cmd(0x0C);   // display on, cursor off
+  lcd_cmd(0x01);   // clear
+  lcd_cmd(0x06);   // move cursor right
+  lcd_cmd(0x80);   // line 1
+  for (i = 0; line1[i] != 0; i++) lcd_data(line1[i]);
+  lcd_cmd(0xC0);   // line 2
+  for (i = 0; line2[i] != 0; i++) lcd_data(line2[i]);
+  while (1);
+}` },
+  s51timer: { name: '21 · 8051: Timer 0 interrupt LED blink (Keil C)', parts: [
+      { id: 'ps1', type: 'battery', x: 40, y: 140, props: { volts: 5, rint: 0.05 } },
+      { id: 'bb1', type: 'breadboard', x: 200, y: 60, props: {} },
+      { id: 'mcu1', type: 'at89s52', x: 0, y: 0, props: {}, at: { bb: 'bb1', pin: '1', hole: 'F5' } },
+      { id: 'led1', type: 'led', x: 420, y: 330, props: { color: 'red' } },
+      { id: 'r1', type: 'resistor', x: 520, y: 380, props: { ohms: 330 } }],
+    wires: [W('ps1:+', 'bb1:TP1'), W('ps1:-', 'bb1:TN1'), W('bb1:TP2', 'bb1:BP2'), W('bb1:TN3', 'bb1:BN3'), W('bb1:A5', 'bb1:TP5'), W('bb1:J24', 'bb1:BN24'), W('led1:A', 'bb1:BP9'), W('led1:C', 'r1:1'), W('r1:2', 'bb1:J5')],
+    code: `// Timer 0 interrupt every 50 ms; the LED on P1.0 toggles every 0.5 s.
+// TH0:TL0 = 4C00H gives 46 080 counts = 50 ms at 11.0592 MHz.
+#include <reg51.h>
+sbit LED = P1^0;          // LED from +5 V through 330 R into P1.0 (0 = ON)
+unsigned int count = 0;
+
+void timer0_isr(void) interrupt 1 {
+  TH0 = 0x4C;
+  TL0 = 0x00;
+  count++;
+  if (count == 10) { count = 0; LED = ~LED; }
+}
+
+void main(void) {
+  TMOD = 0x01;            // timer 0, mode 1
+  TH0 = 0x4C; TL0 = 0x00;
+  ET0 = 1; EA = 1;        // enable timer 0 interrupt
+  TR0 = 1;                // start
+  while (1);
+}` },
+  s51serial: { name: '22 · 8051: serial port printf (Keil C)', parts: [
+      { id: 'ps1', type: 'battery', x: 40, y: 140, props: { volts: 5, rint: 0.05 } },
+      { id: 'bb1', type: 'breadboard', x: 200, y: 60, props: {} },
+      { id: 'mcu1', type: 'at89s52', x: 0, y: 0, props: {}, at: { bb: 'bb1', pin: '1', hole: 'F5' } },],
+    wires: [W('ps1:+', 'bb1:TP1'), W('ps1:-', 'bb1:TN1'), W('bb1:TP2', 'bb1:BP2'), W('bb1:TN3', 'bb1:BN3'), W('bb1:A5', 'bb1:TP5'), W('bb1:J24', 'bb1:BN24')],
+    code: `// 8051 serial communication at 9600 baud: messages appear in the Serial Monitor.
+#include <reg51.h>
+#include <stdio.h>
+
+void delay(unsigned int ms) {
+  unsigned int i, j;
+  for (i = 0; i < ms; i++)
+    for (j = 0; j < 1275; j++);
+}
+
+void main(void) {
+  unsigned int n = 0;
+  SCON = 0x50;            // mode 1, receive enabled
+  TMOD = 0x20;            // timer 1, mode 2
+  TH1 = 0xFD;             // 9600 baud
+  TR1 = 1;
+  SBUF = 'V'; while (TI == 0); TI = 0;     // send one byte the low-level way
+  SBUF = 'T'; while (TI == 0); TI = 0;
+  SBUF = 'U'; while (TI == 0); TI = 0;
+  printf("\\nHello from the 8051\\n");
+  while (1) {
+    printf("count = %u\\n", n);
+    n++;
+    delay(300);
+  }
+}` },
+  s51adc: { name: '23 · 8051: ADC0804 reads a knob (Keil C)', parts: [
+      { id: 'ps1', type: 'battery', x: 40, y: 140, props: { volts: 5, rint: 0.05 } },
+      { id: 'bb1', type: 'breadboard', x: 200, y: 60, props: {} },
+      { id: 'mcu1', type: 'at89s52', x: 0, y: 0, props: {}, at: { bb: 'bb1', pin: '1', hole: 'F5' } },
+      { id: 'adc1', type: 'adc0804', x: 300, y: 330, props: {} },
+      { id: 'pot1', type: 'pot', x: 620, y: 330, props: { ohms: 10000, pos: 60 } }],
+    wires: [W('ps1:+', 'bb1:TP1'), W('ps1:-', 'bb1:TN1'), W('bb1:TP2', 'bb1:BP2'), W('bb1:TN3', 'bb1:BN3'), W('bb1:A5', 'bb1:TP5'), W('bb1:J24', 'bb1:BN24'), W('adc1:D0', 'bb1:J5'), W('adc1:D1', 'bb1:J6'), W('adc1:D2', 'bb1:J7'), W('adc1:D3', 'bb1:J8'), W('adc1:D4', 'bb1:J9'), W('adc1:D5', 'bb1:J10'), W('adc1:D6', 'bb1:J11'), W('adc1:D7', 'bb1:J12'), W('adc1:VCC', 'bb1:BP26'), W('adc1:GND', 'bb1:BN26'), W('pot1:VCC', 'bb1:BP28'), W('pot1:GND', 'bb1:BN28'), W('pot1:SIG', 'adc1:VIN')],
+    code: `// ADC0804 output on P1. Turn the knob and watch the value and voltage in the Serial Monitor.
+#include <reg51.h>
+#include <stdio.h>
+
+void delay(unsigned int ms) {
+  unsigned int i, j;
+  for (i = 0; i < ms; i++)
+    for (j = 0; j < 1275; j++);
+}
+
+void main(void) {
+  unsigned char value;
+  unsigned int mv;
+  P1 = 0xFF;              // make P1 an input
+  while (1) {
+    value = P1;
+    mv = value * 196 / 10;   // 5000 mV / 255 ≈ 19.6 mV per step
+    printf("ADC = %u  (%u mV)\\n", value, mv);
+    delay(400);
+  }
+}` },
+  ardlcd: { name: '24 · Arduino: 16×2 LCD with LiquidCrystal (4-bit)', parts: [
+      { id: 'uno1', type: 'uno', x: 30, y: 290, props: {} },
+      { id: 'lcd1', type: 'lcdpar', x: 420, y: 60, props: {} }],
+    wires: [W('lcd1:RS', 'uno1:12'), W('lcd1:E', 'uno1:11'), W('lcd1:D4', 'uno1:5'), W('lcd1:D5', 'uno1:4'), W('lcd1:D6', 'uno1:3'), W('lcd1:D7', 'uno1:2'), W('lcd1:VSS', 'uno1:GND.1'), W('lcd1:VDD', 'uno1:5V'), W('lcd1:RW', 'uno1:GND.2'), W('lcd1:V0', 'uno1:GND.3')],
+    code: `// The classic LiquidCrystal example: 4-bit bus on pins 12, 11, 5, 4, 3, 2
+#include <LiquidCrystal.h>
+LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
+
+void setup() {
+  lcd.begin(16, 2);
+  lcd.print("hello, world!");
+}
+
+void loop() {
+  lcd.setCursor(0, 1);
+  lcd.print(millis() / 1000);
+  lcd.print(" s");
+  delay(500);
+}` },
 };

@@ -469,6 +469,38 @@ await test('8051 Assembly Lab: every program assembles, runs and gives the right
   assert(errs.length === 0, errs.join(' | ')); await ctx.close();
 });
 
+await test('VTU 8051 interfacing: stepper, DAC, LCD, timer interrupt, serial, ADC and the Arduino LCD all work', async () => {
+  const p = await page('s51stepper'); const st = id => p.evaluate(id => window.ccbb.S.parts.find(x => x.id === id).state, id);
+  const run = async proj => { await p.evaluate(k => window.ccbb.load(window.ccbb.PROJECTS[k]), proj); await p.waitForFunction(() => window.ccbb.S.ready); await p.evaluate(() => document.getElementById('btnRun').click()); };
+  const stop = () => p.evaluate(() => { const b = document.getElementById('btnStop'); if (b && !b.disabled) b.click(); });
+  const fail = (m) => p.evaluate(m => m + ' | err: ' + (document.getElementById('err')?.textContent || '-') + ' | warn: ' + (document.getElementById('warns')?.textContent || '').slice(0, 200), m);
+  // stepper (C): coils follow the sequence and the shaft turns
+  await run('s51stepper'); await p.waitForTimeout(2000); let s1 = await st('stp1');
+  assert(Math.abs(s1.steps || 0) >= 20, await fail('stepper steps ' + s1.steps)); await shot(p, '22-8051-stepper'); await stop();
+  // DAC (assembly): exact triangle wave samples, 0 to ~5 V, ≈ 450 Hz
+  await run('s51dac'); await p.waitForTimeout(1500); const h = (await st('dac1')).hist || [];
+  const vs = h.map(x => x[1]); assert(h.length > 500 && Math.max(...vs) > 4.9 && Math.min(...vs) < 0.05, await fail('DAC samples ' + h.length));
+  const sc = await p.evaluate(() => document.querySelector('[data-id="sc1"] cb-scope').textContent); const f = parseFloat((sc.match(/f ([\d.]+) Hz/) || [])[1]);
+  assert(f > 380 && f < 520, 'triangle frequency ' + f + ' | ' + sc); await shot(p, '23-8051-dac'); await stop();
+  // LCD (C, 8-bit bus)
+  await run('s51lcd'); await p.waitForFunction(() => /LCD INTERFACE/.test(document.querySelector('[data-id="lcd1"] wokwi-lcd1602').text || ''), null, { timeout: 8000 }).catch(() => {});
+  const txt = await p.evaluate(() => document.querySelector('[data-id="lcd1"] wokwi-lcd1602').text);
+  assert(/^VTU 8051 LAB {4}LCD INTERFACE/.test(txt), await fail('LCD text "' + txt + '"')); await shot(p, '24-8051-lcd'); await stop();
+  // timer interrupt: LED toggles every 0.5 s
+  await run('s51timer'); const seen = []; for (let k = 0; k < 24; k++) { seen.push(await ledOn(p, 'led1')); await p.waitForTimeout(100); }
+  const changes = seen.filter((v, k) => k && v !== seen[k - 1]).length; assert(changes >= 3 && changes <= 6, await fail('LED toggles in 2.4 s: ' + changes)); await stop();
+  // serial: SBUF bytes and printf
+  await run('s51serial'); await p.waitForTimeout(1500); const ser = await p.evaluate(() => document.getElementById('serial').textContent); console.error('ser',JSON.stringify(ser.slice(0,100)));
+  assert(/^VTU/.test(ser) && /Hello from the 8051/.test(ser) && /count = 1/.test(ser), await fail('serial: ' + ser.slice(0, 120))); await stop();
+  // ADC: knob at 60 % of 5 V → 153
+  await run('s51adc'); await p.waitForTimeout(1200); const adc = await p.evaluate(() => document.getElementById('serial').textContent);
+  assert(/ADC = 15[2-4]/.test(adc), await fail('adc: ' + adc.slice(0, 80))); await stop();
+  // Arduino LiquidCrystal (4-bit) drives the same LCD controller
+  await run('ardlcd'); await p.waitForTimeout(1500); const t2 = await p.evaluate(() => document.querySelector('[data-id="lcd1"] wokwi-lcd1602').text);
+  assert(/^hello, world! {3}\d+ s/.test(t2), await fail('Arduino LCD "' + t2 + '"')); await shot(p, '25-arduino-lcd'); await stop();
+  assert(p.errors.length === 0, p.errors.join(' | ')); await p.close();
+});
+
 await test('Code panel minimizes and restores', async () => {
   const p = await page('blink');
   await p.click('#btnMin'); await p.waitForTimeout(250);

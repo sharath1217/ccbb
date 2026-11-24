@@ -60,6 +60,35 @@ const supply = (c, vcc = 'VCC', gnd = 'GND') => c.v(vcc) - c.v(gnd);
 // LED-like part with any colour
 const led = (a, cth, color, tag) => ({ type: 'D', a, c: cth, ...ledParams(color), tag });
 
+// ULN2003 + 28BYJ-48: each change of the energised coils turns the rotor towards them (also called on every pin change)
+export function stepperUpdate(st, coils, powered = true) {
+  const key = coils.join(''); if (key === st.key) return; st.key = key; st.coils = coils;
+  const n = coils.filter(Boolean).length; if (!n || !powered) return;
+  let x = 0, y = 0; coils.forEach((on, i) => { if (on) { x += Math.cos(i * Math.PI / 2); y += Math.sin(i * Math.PI / 2); } });
+  if (Math.hypot(x, y) < 1e-6) return; const ang = Math.atan2(y, x) * 180 / Math.PI;
+  if (st.phase !== undefined) { let d = ang - st.phase; while (d > 180) d -= 360; while (d <= -180) d += 360; st.steps = (st.steps || 0) + d / 90; }
+  st.phase = ang;
+}
+// HD44780 LCD controller: feed it every change of E/RS/D0–D7; it decodes 8-bit and 4-bit transfers
+export function lcdController(st, { e, rs, d }) {
+  st.ddram ??= Array(128).fill(32); st.ac ??= 0; st.dl8 ??= true; st.on ??= false; st.inc ??= 1;
+  const fell = st.e === 1 && e === 0; st.e = e; if (!fell) return false;
+  let v;
+  if (st.dl8) v = d.reduce((a, b, i) => a | (b << i), 0);
+  else { const nib = (d[4] | d[5] << 1 | d[6] << 2 | d[7] << 3); if (st.hi === undefined) { st.hi = nib; st.hiRs = rs; return false; } v = (st.hi << 4) | nib; st.hi = undefined; }
+  if (!rs) {
+    if (v & 0x80) st.ac = v & 0x7F;
+    else if (v & 0x40) { /* CGRAM: custom characters not shown */ }
+    else if (v & 0x20) { st.dl8 = !!(v & 0x10); st.hi = undefined; }
+    else if (v & 0x08) st.on = !!(v & 0x04);
+    else if (v & 0x04) st.inc = v & 0x02 ? 1 : -1;
+    else if (v & 0x02) st.ac = 0;
+    else if (v & 0x01) { st.ddram.fill(32); st.ac = 0; }
+  } else { st.ddram[st.ac & 0x7F] = v; st.ac = (st.ac + st.inc) & 0x7F; }
+  return true;
+}
+export const lcdText = (st, cols = 16, rows = 2) => !st.on ? '' : [0, 0x40, 0x14, 0x54].slice(0, rows).map(o => String.fromCharCode(...st.ddram.slice(o, o + cols).map(c => c < 32 || c > 126 ? 32 : c))).join('');
+
 export const MODELS = {
   // ---------- power ----------
   battery: { pins: ['+', '-'], ground: '-', elements: p => [Src('+', '-', p.props.volts ?? 9, p.props.rint ?? 1.5, 'cell')],
@@ -257,6 +286,29 @@ export const MODELS = {
   relaymod: { pins: ['VCC', 'GND', 'IN', 'COM', 'NO', 'NC'], elements: p => [R('VCC', 'GND', p.state.on ? 70 : 5000, 'coil'), R('IN', 'VCC', 10000, 'pull'), R('COM', p.state.on ? 'NO' : 'NC', 0.05, 'k')],
     behave(p, c) { const vs = supply(c), vin = c.v('IN') - c.v('GND'); p.state.on = vs > 4 && vin < 1.5; },     // most modules: active LOW
     check(p, c, W, out) { out.on = !!p.state.on; } },
+  // ---------- interfacing parts used in 8051 / microcontroller labs ----------
+  lcdpar: { pins: ['VSS', 'VDD', 'V0', 'RS', 'RW', 'E', 'D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'A', 'K'],
+    elements: () => [R('VDD', 'VSS', 2000, 'logic'), ...['RS', 'RW', 'E', 'D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7'].map(q => R(q, 'VSS', 1e7, q)), R('V0', 'VSS', 1e6, 'v0'), { type: 'D', a: 'A', c: 'K', ...ledParams('yellow'), tag: 'bl' }],
+    check(p, c, W) { const vs = supply(c, 'VDD', 'VSS'); if (vs > 0.3 && vs < 4.5) W('warn', `LCD needs 5 V on VDD (now ${vs.toFixed(1)} V).`);
+      if (vs >= 4.5 && c.floating('RW')) W('warn', 'LCD RW (pin 5) is not connected: tie it to GND to write to the display.');
+      if (c.I('bl') > 0.03) W('warn', 'LCD backlight current is high: use a 220 Ω resistor on pin A.'); } },
+  dac0808: { pins: ['D7', 'D6', 'D5', 'D4', 'D3', 'D2', 'D1', 'D0', 'VCC', 'GND', 'OUT'],
+    elements(p) { return [R('VCC', 'GND', 5000, 'iq'), ...['D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7'].map(q => R(q, 'GND', 1e6, q)), Src('OUT', 'GND', (p.state.vref || 0) * (p.state.code || 0) / 256, 100, 'out')]; },
+    behave(p, c) { const vs = supply(c); p.state.vref = vs > 4 ? vs : 0; p.state.code = [0, 1, 2, 3, 4, 5, 6, 7].reduce((a, b) => a | ((c.v('D' + b) - c.v('GND') > 2 ? 1 : 0) << b), 0); },
+    check(p, c, W, out) { out.code = p.state.code; out.voltage = c.v('OUT') - c.v('GND'); if (supply(c) < 4) W('warn', 'DAC0808 module needs 5 V on VCC.'); } },
+  adc0804: { dyn: true, pins: ['VIN', 'VCC', 'GND', 'D7', 'D6', 'D5', 'D4', 'D3', 'D2', 'D1', 'D0'],
+    elements(p, c) { const vs = supply(c), code = vs > 4 ? Math.max(0, Math.min(255, Math.round((c.v('VIN') - c.v('GND')) / vs * 255))) : 0; p.state.code = code;
+      return [R('VCC', 'GND', 10000, 'iq'), R('VIN', 'GND', 1e6, 'vin'), ...[0, 1, 2, 3, 4, 5, 6, 7].map(b => Src('D' + b, 'GND', (code >> b) & 1 ? vs : 0, 200, 'd' + b))]; },
+    check(p, c, W, out) { out.code = p.state.code; if (supply(c) < 4) W('warn', 'ADC0804 module needs 5 V on VCC.'); } },
+  stepper: { pins: ['IN1', 'IN2', 'IN3', 'IN4', 'VCC', 'GND'],
+    elements(p, c) { const on = p.state.coils || [0, 0, 0, 0], n = on.filter(Boolean).length;
+      // each ULN2003 input: 2.7 kΩ into a Darlington pair (two base-emitter junctions ≈ 1.4 V)
+      return [...['IN1', 'IN2', 'IN3', 'IN4'].flatMap((q, i) => [{ type: 'D', a: q, c: '_b' + i, ...SILICON, tag: q }, { type: 'D', a: '_b' + i, c: '_e' + i, ...SILICON, tag: q + 'be' }, R('_e' + i, 'GND', 2700, q + 'r')]),
+        R('VCC', 'GND', n ? 50 / n : 1e6, 'coils')]; },
+    behave(p, c) { stepperUpdate(p.state, ['IN1', 'IN2', 'IN3', 'IN4'].map(q => c.v(q) - c.v('GND') > 1.8 ? 1 : 0), supply(c) >= 4); },
+    check(p, c, W, out) { const st = p.state.steps || 0; out.steps = Math.round(st * 2) / 2; out.angle = Math.round(st * 360 / 2048 * 10) / 10;
+      if (supply(c) < 4 && (p.state.coils || []).some(Boolean)) W('warn', 'Stepper (ULN2003 board) needs 5 V on VCC to turn.');
+      for (const m of c.mcuPinsOn(['VCC'])) W('warn', `Stepper motor powered from pin ${m}: use the 5V supply, a pin cannot provide coil current.`); } },
   // ---------- displays & modules on I2C (driven by code libraries) ----------
   lcd: { pins: ['GND', 'VCC', 'SDA', 'SCL'], elements: () => [R('VCC', 'GND', 250, 'backlight'), R('SDA', 'GND', 1e7, 'sda'), R('SCL', 'GND', 1e7, 'scl')],
     check(p, c, W) { const vs = supply(c); if (vs > 0.3 && vs < 4.5) W('warn', `LCD 16×2 needs 5 V (now ${vs.toFixed(1)} V): text will be faint or missing.`); } },
