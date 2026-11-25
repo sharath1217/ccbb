@@ -1,3 +1,5 @@
+import { DIGITAL_PROJECTS } from './digital-projects.js';
+import { LOGIC_ICS } from '../engine/logic-ics.js';
 // Parts the student can place, and starter projects.
 // Parts the student can place. controls = what the student can change (sliders / switches / menus).
 const R = (label, key, min, max, step = 1, unit = '') => ({ kind: 'range', label, key, min, max, step, unit });
@@ -45,6 +47,7 @@ export const CATALOG = [
   { type: 'hc00', tag: 'cb-dip', attrs: { n: 14, label: '74HC00' }, name: 'NAND gate 74HC00', group: 'Transistors & ICs', props: {}, desc: 'Quad 2-input NAND · 2–6 V', price: [15, 25] },
   { type: 'hc86', tag: 'cb-dip', attrs: { n: 14, label: '74HC86' }, name: 'XOR gate 74HC86', group: 'Transistors & ICs', props: {}, desc: 'Quad 2-input XOR · 2–6 V', price: [15, 25] },
   { type: 'hc04', tag: 'cb-dip', attrs: { n: 14, label: '74HC04' }, name: 'NOT gate 74HC04', group: 'Transistors & ICs', props: {}, desc: 'Hex inverter · 2–6 V', price: [15, 25] },
+  ...Object.entries(LOGIC_ICS).map(([type, c]) => ({ type, tag: 'cb-dip', attrs: { n: c.n, label: c.label }, name: c.name, group: 'Digital ICs', props: {}, desc: c.desc + (c.ttl ? ' · 5 V TTL' : type === 'cd4017' ? ' · 3–15 V' : ' · 2–6 V'), price: c.ttl ? [20, 35] : [15, 40] })),
   // ---- output ----
   { type: 'led', tag: 'wokwi-led', name: 'LED', group: 'Output', props: { color: 'red' }, desc: '5 mm, 20 mA rated', price: [1, 3], controls: [M('Colour', 'color', ['red', 'yellow', 'green', 'blue', 'white'])] },
   { type: 'rgb', tag: 'wokwi-rgb-led', name: 'RGB LED', group: 'Output', props: {}, desc: 'Common cathode · R G B pins', price: [5, 10] },
@@ -485,4 +488,5 @@ void loop() {
   lcd.print(" s");
   delay(500);
 }` },
+  ...DIGITAL_PROJECTS,
 };

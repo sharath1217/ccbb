@@ -1,4 +1,5 @@
 // Builds a netlist from placed parts + wires, solves it (DC or one transient step) and interprets the results.
+import { logicModels } from './logic-ics.js';
 import { solve, ledParams, SILICON, SCHOTTKY } from './solver.js';
 import { BOARDS, boardPinList } from './boards.js';
 
@@ -170,6 +171,7 @@ export const MODELS = {
       p.state.out = this.gates.map(([a, b]) => this.fn(c.v(a) - c.v('7') > vcc / 2, c.v(b) - c.v('7') > vcc / 2) ? 1 : 0); },
     check(p, c, W, out) { const vcc = supply(c, '14', '7'); out.supply = vcc; out.outputs = (p.state.out || []).join(' ');
       if (vcc > 0.3 && vcc < 2) W('warn', `74HC chip is not powered: connect pin 14 to + and pin 7 to GND.`); if (vcc > 7) W('bad', `74HC chips max 7 V supply (now ${vcc.toFixed(1)} V).`); } }])),
+  ...logicModels({ R, Src, OPEN, supply }),
   hc04: { pins: Array.from({ length: 14 }, (_, i) => String(i + 1)), gates: [['1', '2'], ['3', '4'], ['5', '6'], ['9', '8'], ['11', '10'], ['13', '12']],
     elements(p) { const out = p.state.out || [], vcc = p.state.vcc || 0, on = vcc > 1.8;
       return [R('14', '7', 50000, 'iq'), ...this.gates.flatMap(([a, y], i) => [R(a, '7', 1e8, 'in'), on ? Src(y, '7', out[i] ? vcc : 0, 50, 'y' + i) : R(y, '7', OPEN, 'y' + i)])]; },

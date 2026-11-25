@@ -87,7 +87,7 @@ function placeHost(p) { const h = els.get(p.id).host; h.style.left = p.x + 'px';
 const kids = bbId => S.parts.filter(q => S.wires.some(w => w.hidden && w.from.startsWith(q.id + ':') && w.to.startsWith(bbId + ':')));
 function tryInsert(p) {
   S.wires = S.wires.filter(w => !(w.hidden && w.from.startsWith(p.id + ':')));
-  if (!INSERTABLE.includes(p.type)) return false;
+  if (!INSERTABLE.includes(p.type) && BY_TYPE[p.type]?.tag !== 'cb-dip') return false;   // every DIP chip plugs into a breadboard
   const pins = (PIN_LIST[p.type] || []).map(n => [n, pinPos(p.id + ':' + n)]).filter(x => x[1]);
   let best = null;
   for (const bb of S.parts.filter(q => q.type === 'breadboard')) {

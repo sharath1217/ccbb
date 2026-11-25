@@ -375,7 +375,7 @@ await test('Home page: every lesson link opens its project without errors', asyn
   const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } }); const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.goto(base.replace('app/index.html', 'index.html')); if (SHOTS) await p.screenshot({ path: path.join(root, 'screenshots', 'home.png'), fullPage: true });
   const links = await p.locator('a.lesson').evaluateAll(as => as.map(a => a.href));
-  assert(links.length === 39, 'lessons ' + links.length);
+  assert(links.length === 50, 'lessons ' + links.length);
   for (const l of links.filter(x => x.includes('project='))) { await p.goto(l); await p.waitForFunction(() => window.ccbb && window.ccbb.S.ready, null, { timeout: 15000 });
     assert(await p.locator('.part').count() > 1, 'empty project ' + l); }
   const man = JSON.parse(fs.readFileSync(path.join(root, 'app/manifest.webmanifest'), 'utf8')); assert(man.name && man.icons.length && man.start_url, 'manifest');
@@ -499,6 +499,24 @@ await test('VTU 8051 interfacing: stepper, DAC, LCD, timer interrupt, serial, AD
   await run('ardlcd'); await p.waitForTimeout(1500); const t2 = await p.evaluate(() => document.querySelector('[data-id="lcd1"] wokwi-lcd1602').text);
   assert(/^hello, world! {3}\d+ s/.test(t2), await fail('Arduino LCD "' + t2 + '"')); await shot(p, '25-arduino-lcd'); await stop();
   assert(p.errors.length === 0, p.errors.join(' | ')); await p.close();
+});
+
+await test('Digital lab: 7490 counter counts on the 7-segment, 595 latches shiftOut, D flip-flop clocks, 283 adds', async () => {
+  const p = await page('dig_counter'); const sim = (id) => p.evaluate(id => window.ccbb.S.sim.parts[id], id);
+  const SEG = ['1111110', '0110000', '1101101', '1111001', '0110011', '1011011', '0011111', '1110000', '1111111', '1110011'];  // a..g lit for 0–9 (7447 shapes)
+  const digit = v => SEG.indexOf(v.slice(0, 7).map(x => (x ? 1 : 0)).join(''));
+  const seen = new Set(); for (let i = 0; i < 12; i++) { const d = (await sim('d1')).values || []; seen.add(digit(d)); await p.waitForTimeout(400); }
+  seen.delete(-1); assert(seen.size >= 3, 'counter digits seen: ' + [...seen]); await shot(p, '26-digital-counter'); await p.close();
+  const q = await page('dig_595'); await q.evaluate(() => document.getElementById('btnRun').click()); await q.waitForTimeout(900);
+  const bars = (await q.evaluate(() => window.ccbb.S.sim.parts.bar1.values)).slice(0, 8).map(x => (x ? 1 : 0)).join('');
+  assert(bars === '01001101', '595 outputs QA..QH ' + bars); await q.evaluate(() => document.getElementById('btnStop').click()); await q.close();
+  const f = await page('dig_dff'); const Q = () => f.evaluate(() => window.ccbb.S.sim.voltAt('u1', '5') > 2.5);
+  const press = async on => { await f.evaluate(on => { const b = window.ccbb.S.parts.find(x => x.id === 'btn1'); b.props.pressed = on; window.ccbb.simNow(); }, on); };
+  assert(!(await Q()), 'Q starts low'); await press(true); assert(await Q(), 'clock edge stores D = 1'); await press(false);
+  await f.evaluate(() => { window.ccbb.S.parts.find(x => x.id === 'swD').props.on = false; window.ccbb.simNow(); }); assert(await Q(), 'Q holds when D changes');
+  await press(true); assert(!(await Q()), 'next edge stores D = 0'); await f.close();
+  const a = await page('dig_adder'); const sum = (await a.evaluate(() => window.ccbb.S.sim.parts.bar1.values)).slice(0, 5).map(x => (x ? 1 : 0));
+  assert(sum.join('') === '11010', '5 + 6 = 11 → S1..C4 ' + sum.join('')); await a.close();
 });
 
 await test('Code panel minimizes and restores', async () => {

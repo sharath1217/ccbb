@@ -110,7 +110,7 @@ export function createRunner(io, { speed = 1, now = () => performance.now(), sle
   const pin = p => String(p);
   const api = {
     HIGH: 1, LOW: 0, OUTPUT: 'OUTPUT', INPUT: 'INPUT', INPUT_PULLUP: 'INPUT_PULLUP', LED_BUILTIN: 13, true: true, false: false,
-    A0: 'A0', A1: 'A1', A2: 'A2', A3: 'A3', A4: 'A4', A5: 'A5', DEC: 10, HEX: 16, BIN: 2, PI: Math.PI,
+    MSBFIRST: 1, LSBFIRST: 0, A0: 'A0', A1: 'A1', A2: 'A2', A3: 'A3', A4: 'A4', A5: 'A5', DEC: 10, HEX: 16, BIN: 2, PI: Math.PI,
     INPUT_PULLDOWN: 'INPUT_PULLDOWN', DHT11: 11, DHT22: 22, SSD1306_SWITCHCAPVCC: 2, SSD1306_WHITE: 1, SSD1306_BLACK: 0, WHITE: 1, BLACK: 0,
     Wire: { begin: () => {}, setClock: () => {} },
     pulseIn: (p, level = 1, timeout = 1e6) => io.pulseIn ? io.pulseIn(pin(p), level, timeout) : 0,
@@ -172,6 +172,9 @@ export function createRunner(io, { speed = 1, now = () => performance.now(), sle
     __f: v => ({ __float: v }), __int: v => typeof v === 'number' ? Math.trunc(v) : v, isnan: Number.isNaN, isinf: v => !isFinite(v), sq: x => x * x,
     pinMode: (p, m) => io.pinMode(pin(p), m),
     digitalWrite: (p, v) => io.digitalWrite(pin(p), v ? 1 : 0),
+    shiftOut: (d, c, order, val) => { for (let i = 0; i < 8; i++) { const b = order === 1 ? (val >> (7 - i)) & 1 : (val >> i) & 1;   // 1 = MSBFIRST
+      io.digitalWrite(pin(d), b); io.digitalWrite(pin(c), 1); io.digitalWrite(pin(c), 0); } },
+    shiftIn: (d, c, order) => { let v = 0; for (let i = 0; i < 8; i++) { io.digitalWrite(pin(c), 1); const b = io.digitalRead(pin(d)) ? 1 : 0; v |= order === 1 ? b << (7 - i) : b << i; io.digitalWrite(pin(c), 0); } return v; },
     analogWrite: (p, v) => io.analogWrite(pin(p), Math.max(0, Math.min(255, Math.round(v)))),
     digitalRead: p => io.digitalRead(pin(p)),
     analogRead: p => io.analogRead(pin(typeof p === 'number' && p < 6 ? 'A' + p : p)),
