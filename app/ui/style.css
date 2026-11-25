@@ -82,3 +82,15 @@ svg.wires{pointer-events:none}.wire{pointer-events:stroke}
 .serial-in{display:flex;gap:6px;align-items:center;padding:6px 8px;border-top:1px solid #2a2f3a}.serial-in input#serialIn{flex:1;min-width:0;background:#0f1218;color:#e5e7eb;border:1px solid #333a47;border-radius:6px;padding:4px 7px;font:12px ui-monospace,monospace}
 .serial-in label{font-size:11px;color:#9aa3b5;display:flex;gap:3px;align-items:center}
 .phone{border:1px solid var(--line,#ddd);border-radius:8px;padding:6px;margin:6px 0}.phone .plog{background:#0f172a;color:#a7f3d0;font:11px ui-monospace,monospace;min-height:40px;max-height:110px;overflow:auto;padding:5px;border-radius:5px;margin:4px 0;white-space:pre-wrap}
+
+/* 3D bench view: the table tilts back like a real lab bench, parts stand up with depth and shadows */
+.board.v3d{background:radial-gradient(ellipse at 50% 0%,#e8e2d4,#b9ae98 70%,#8d816b)}
+.board.v3d .scroll{perspective:1700px;perspective-origin:50% -10%;overflow:hidden}
+.board.v3d .world{transform-origin:var(--cx) var(--cy);transform:translate(calc(var(--vx) - var(--cx)),calc(var(--vy) - var(--cy))) scale(var(--k,1)) rotateX(38deg) rotateZ(-8deg)!important;transform-style:preserve-3d;transition:transform .5s ease;
+  background:#f7f3ea linear-gradient(#0000 98%,#ddd5c4 0) 0 0/40px 40px;box-shadow:0 60px 80px #0006,0 0 0 14px #6b5a45,0 0 0 16px #4a3d2e;border-radius:6px}
+.board.v3d .world .part{transform:translateZ(14px);filter:drop-shadow(-6px 16px 6px #0005)}
+.board.v3d .world .part:has(cb-breadboard){transform:translateZ(2px);filter:drop-shadow(-3px 8px 4px #0004)}
+.board.v3d .pins,.board.v3d .tag{display:none}
+.board.v3d #parts{transform:translateZ(9px);transform-style:preserve-3d}
+.board.v3d .wires{transform:translateZ(4px);filter:drop-shadow(-3px 8px 3px #0004)}
+#btn3d.on{background:#1e293b;color:#fff;border-color:#1e293b}

@@ -180,7 +180,7 @@ function wirePath(a, b, lane = 0, ka = '', kb = '') {
 }
 // ---------------- drawing ----------------
 let flowOffset = 0;
-function drawWires() {
+function drawWires() { if (S.v3d) return;
   const svg = $('wires');
   let lane = 0;
   svg.innerHTML = S.wires.map((w, i) => { if (w.hidden) return ''; const a = pinPos(w.from), b = pinPos(w.to); if (!a || !b) return '';
@@ -189,7 +189,7 @@ function drawWires() {
     + (S.pending?.mouse ? (() => { const a = pinPos(S.pending.from); return a ? `<path class="ghost" d="M${a[0]},${a[1]} L${S.pending.mouse[0]},${S.pending.mouse[1]}"/>` : ''; })() : '');
 }
 let holesVisible = true;
-function drawPins() {
+function drawPins() { if (S.v3d) return;
   let h = '';
   for (const p of S.parts) for (const pin of PIN_LIST[p.type] || []) {
     if (isMcu(p.type) && /^(A5\.2|A4\.2|AREF|IOREF|RESET.*|RSV.*|SD\d|CMD|CLK|EN|RST|RUN|3V3_EN|ADC_VREF|VBAT)$/.test(pin)) continue;
@@ -672,7 +672,13 @@ const snapshot = () => ({ version: 1, parts: S.parts.map(({ state, ...p }) => p)
 function save() { try { localStorage.setItem('ccbb.circuit', JSON.stringify(snapshot())); } catch {} }
 addEventListener('resize', () => { drawWires(); drawPins(); });
 
-function setZoom(z) { Z = Math.max(0.6, Math.min(2.2, Math.round(z * 100) / 100)); $('world').style.transform = `scale(${Z})`; $('zoomLbl').textContent = Math.round(Z * 100) + '%'; drawWires(); drawPins(); }
+function set3d(on) { S.v3d = on;
+  if (on) { let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;   // fit the whole circuit into the view
+    for (const p of S.parts) { const h = els.get(p.id)?.host; if (!h) continue; x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x + h.offsetWidth); y1 = Math.max(y1, p.y + h.offsetHeight); }
+    const W = $('scroll').clientWidth, H = $('scroll').clientHeight, k = Math.min(1.6, 0.78 * Math.min(W / (x1 - x0 || 1), H * 1.25 / (y1 - y0 || 1)));
+    const w = $('world').style; w.setProperty('--k', k); w.setProperty('--cx', (x0 + x1) / 2 + 'px'); w.setProperty('--cy', (y0 + y1) / 2 + 'px'); w.setProperty('--vx', W / 2 + 'px'); w.setProperty('--vy', H / 2 + 'px'); } $('board').classList.toggle('v3d', on); $('btn3d').classList.toggle('on', on); $('btn3d').textContent = on ? '🧊 3D: on' : '🧊 3D view'; }
+$('btn3d').onclick = () => set3d(!S.v3d);
+function setZoom(z) { Z = Math.max(0.6, Math.min(2.2, Math.round(z * 100) / 100)); $('world').style.transform = `scale(${Z})`; $('world').style.setProperty('--z', Z); $('zoomLbl').textContent = Math.round(Z * 100) + '%'; drawWires(); drawPins(); }
 $('zIn').onclick = () => setZoom(Z + 0.15); $('zOut').onclick = () => setZoom(Z - 0.15); setZoom(Z);
 // expose for tests / power users
 // ---------------- lab assistant ----------------
@@ -712,7 +718,7 @@ $('aRemember').onchange = $('aKey').onchange = () => { try { $('aRemember').chec
 $('btnBom').onclick = showBom; $('btnUndo').onclick = undo; $('btnRedo').onclick = redo;
 $('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
 if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !navigator.webdriver) navigator.serviceWorker.register('sw.js').catch(() => {});
-window.ccbb = { ask, buildCtx, envParts, effOf, billOfMaterials, showInfo, rotatePart, undo, redo, hist, get simT() { return simT; }, get Z() { return Z; }, setZoom, S, load, addPart, connect: (from, to) => { S.wires.push({ from, to }); changed(); }, simNow: () => (runSim(), S.sim), pinPos, PROJECTS };
+window.ccbb = { set3d, ask, buildCtx, envParts, effOf, billOfMaterials, showInfo, rotatePart, undo, redo, hist, get simT() { return simT; }, get Z() { return Z; }, setZoom, S, load, addPart, connect: (from, to) => { S.wires.push({ from, to }); changed(); }, simNow: () => (runSim(), S.sim), pinPos, PROJECTS };
 
 let initial = null; try { initial = JSON.parse(localStorage.getItem('ccbb.circuit')); } catch {}
 const q = new URLSearchParams(location.search).get('project');
