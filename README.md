@@ -8,7 +8,7 @@ Open `index.html` (home page with lessons) or `app/index.html` through a local s
 **17 microcontrollers**
 Arduino Uno, Nano, Mega 2560, Leonardo, Pro Mini · ATmega328P chip, ATtiny85 · ESP32 DevKit, ESP32-C3, ESP32-S3, ESP8266 NodeMCU · Raspberry Pi Pico, Pico W, Nano RP2040 Connect · STM32 Blue Pill · **8051 AT89S52 (Keil C51)** · **PIC16F877A (MPLAB XC8)**
 
-**131 components**
+**125 parts**
 - Prototyping & power: breadboard, battery, bench supply (current limit), 7805, step-down transformer (12-0-12 V AC)
 - Passive: resistor, potentiometer, slide pot, ceramic & electrolytic capacitors, diode, zener
 - Transistors & ICs: BC547, BC557, IRLZ44N, LM358, NE555, 74HC00/02/04/08/32/86
@@ -31,7 +31,7 @@ Arduino Uno, Nano, Mega 2560, Leonardo, Pro Mini · ATmega328P chip, ATtiny85 ·
 
 **Simulation**: nodal analysis + Newton–Raphson (diodes, BJTs, MOSFETs, op-amps with rail clipping), real-time transient (capacitors, 555), PWM as duty-weighted switching, mistake detection, Arduino C runner with DHT/Servo/LCD (I2C and LiquidCrystal)/OLED/OneWire/DallasTemperature/BMP280/BH1750/MFRC522/NeoPixel/TM1637Display/LedControl/HX711/SoftwareSerial, shiftOut, pulseIn and Serial input, plus register-level C for 8051 and PIC.
 
-**Studio**: breadboard snap-in, rotation, neat right-angle wiring, zoom, search, info window for every part (outside / inside / pins / how it works / specs / mistakes / buying), parts list & cost (₹, CSV), undo/redo, 38 starter projects, autosave, offline install (PWA).
+**Studio**: breadboard snap-in, rotation, neat right-angle wiring, zoom, search, info window for every part (outside / inside / pins / how it works / specs / mistakes / buying), parts list & cost (₹, CSV), undo/redo, 34 starter projects, autosave, offline install (PWA).
 
 Tests: `npm test` (unit/accuracy + browser end-to-end).
 
