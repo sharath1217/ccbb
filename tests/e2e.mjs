@@ -375,7 +375,7 @@ await test('Home page: every lesson link opens its project without errors', asyn
   const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } }); const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.goto(base.replace('app/index.html', 'index.html')); if (SHOTS) await p.screenshot({ path: path.join(root, 'screenshots', 'home.png'), fullPage: true });
   const links = await p.locator('a.lesson').evaluateAll(as => as.map(a => a.href));
-  assert(links.length === 56, 'lessons ' + links.length);
+  assert(links.length === 72, 'lessons ' + links.length);
   for (const l of links.filter(x => x.includes('project='))) { await p.goto(l); await p.waitForFunction(() => window.ccbb && window.ccbb.S.ready, null, { timeout: 15000 });
     assert(await p.locator('.part').count() > 1, 'empty project ' + l); }
   const man = JSON.parse(fs.readFileSync(path.join(root, 'app/manifest.webmanifest'), 'utf8')); assert(man.name && man.icons.length && man.start_url, 'manifest');
@@ -533,6 +533,19 @@ await test('Modules: TM1637, MAX7219, HX711, encoder, HC-05 phone and the bridge
   assert((await st(p, 'bt1')).log.includes('LED is ON') && await ledOn(p, 'led1'), 'bluetooth: ' + (await st(p, 'bt1')).log); await p.close();
   p = await page('mod_rectifier'); await p.waitForTimeout(2500); const sc = await p.evaluate(() => document.querySelector('[data-id="sc1"] cb-scope').textContent);
   const vmax = parseFloat((sc.match(/CH1max ([\d.]+)V/) || [])[1]); assert(vmax > 14.8 && vmax < 16, 'rectified DC ' + sc); await shot(p, '28-rectifier'); await p.close();
+});
+
+await test('Signals & Control lab: every experiment plots and matches MATLAB values', async () => {
+  const p = await browser.newPage({ viewport: { width: 1300, height: 900 } }); const errs = []; p.on('pageerror', e => errs.push(e.message));
+  await p.goto(base.replace('index.html', 'dsp.html') + '?e=iir'); await p.waitForFunction(() => window.dsp && window.dspResult);
+  for (const k of await p.evaluate(() => Object.keys(window.dsp.DSP_TEMPLATES))) { await p.evaluate(k => window.dsp.select(k), k);
+    const n = await p.evaluate(() => ({ figs: document.querySelectorAll('#plots canvas').length, rows: document.querySelectorAll('#rtab tr').length, py: document.getElementById('pyCode').value.length }));
+    assert(n.figs >= 1 && n.rows >= 1 && n.py > 40, k + ' ' + JSON.stringify(n)); }
+  await p.evaluate(() => window.dsp.select('iir')); assert(/-3\.010/.test(await p.locator('#rtab').innerText()), 'Butterworth −3 dB at cut-off');
+  await p.evaluate(() => window.dsp.select('bode')); assert(/9\.542\d* dB/.test(await p.locator('#rtab').innerText()) && /32\.6\d*°/.test(await p.locator('#rtab').innerText()), 'margins');
+  await p.fill('[data-k="wn"]', '5').catch(() => {}); await p.evaluate(() => window.dsp.select('second')); await p.fill('[data-k="z"]', '0.6'); await p.press('[data-k="z"]', 'Enter');
+  assert(/9\.4\d* %/.test(await p.locator('#rtab').innerText()), 'ζ = 0.6 → Mp ≈ 9.48 %: ' + (await p.locator('#rtab').innerText()).slice(0, 120));
+  await shot(p, '29-signals-lab'); assert(errs.length === 0, errs.join(' | ')); await p.close();
 });
 
 await test('Code panel minimizes and restores', async () => {

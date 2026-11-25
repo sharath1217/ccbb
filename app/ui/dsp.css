@@ -1,0 +1,21 @@
+main.dsp{flex:1;display:flex;min-height:0}
+.exps{width:250px;background:var(--card);border-right:1px solid var(--line);overflow:auto;padding:10px}
+.exps h5{margin:12px 4px 6px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
+.exps button{display:block;width:100%;text-align:left;border:1px solid transparent;background:none;border-radius:9px;padding:7px 9px;font:500 13.5px inherit;color:var(--ink);cursor:pointer}
+.exps button:hover{background:#f3efe4}.exps button.on{background:#ecfdf9;border-color:var(--acc);font-weight:700}
+.work{flex:1;overflow:auto;padding:14px 18px;min-width:0}
+.ehd{display:flex;align-items:center;gap:10px}.ehd h2{margin:0;font-size:20px}.small{font-size:12.5px}
+.tabs{display:flex;gap:4px}.tab{border:1px solid var(--line);background:#fff;border-radius:9px;padding:6px 12px;font:600 13px inherit;cursor:pointer}.tab.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.params{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-end;margin:12px 0;padding:10px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.params label{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--mut)}
+.params input,.params select{border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:14px ui-monospace,monospace;color:var(--ink);width:110px}.params input.wide{width:200px}
+.plots{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:12px}
+.plots figure{margin:0;background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px}.plots figcaption{font:600 13px inherit;margin:2px 4px 6px}
+.plots canvas{width:100%;height:auto;aspect-ratio:900/520;display:block}
+.rtab{margin-top:12px;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;min-width:420px;max-width:100%}
+.rtab td{padding:6px 10px;border-bottom:1px solid var(--line);font-size:13.5px;vertical-align:top}.rtab td:first-child{color:var(--mut);white-space:nowrap}.rtab td:last-child{font-family:ui-monospace,monospace;word-break:break-word}
+#pyCode{width:100%;height:240px;font:13px/1.5 ui-monospace,monospace;border:1px solid var(--line);border-radius:10px;padding:10px;background:#0f172a;color:#e2e8f0;box-sizing:border-box}
+.row{display:flex;gap:8px;align-items:center;margin:8px 0}
+#pyOut{background:#111827;color:#a7f3d0;border-radius:10px;padding:10px;min-height:30px;white-space:pre-wrap;font:12.5px ui-monospace,monospace}
+#pyFigs img{max-width:100%;background:#fff;border:1px solid var(--line);border-radius:10px;margin-top:8px}
+@media (max-width:800px){main.dsp{flex-direction:column}.exps{width:auto;max-height:180px;border-right:0;border-bottom:1px solid var(--line)}.plots{grid-template-columns:1fr}.rtab{min-width:0}}

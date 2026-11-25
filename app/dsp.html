@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ccbb Signals Lab</title>
+<link rel="stylesheet" href="ui/style.css"><link rel="stylesheet" href="ui/dsp.css">
+<link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg"><meta name="theme-color" content="#0f9d8f">
+<script type="module" src="ui/dsp.js"></script>
+</head><body>
+<header class="top">
+  <a class="brand" href="../index.html" title="Home"><span class="logo"></span>ccbb <small>Signals, DSP &amp; Control Lab</small></a>
+  <span class="grow"></span>
+  <a class="btn" href="lab.html">📈 Circuit Lab</a><a class="btn" href="index.html">⚡ Circuit Studio</a>
+</header>
+<main class="dsp">
+  <nav class="exps" id="exps" aria-label="Experiments"></nav>
+  <section class="work">
+    <div class="ehd"><div><h2 id="eTitle"></h2><div class="mut small" id="eGroup"></div></div><span class="grow"></span>
+      <div class="tabs" role="tablist"><button class="tab on" data-tab="results" role="tab">Results</button><button class="tab" data-tab="python" role="tab">Python code</button></div></div>
+    <form class="params" id="params"></form>
+    <div id="tabResults"><div class="plots" id="plots"></div><table class="rtab" id="rtab"></table></div>
+    <div id="tabPython" hidden>
+      <p class="mut small">The same experiment in NumPy / SciPy (the free MATLAB alternative). Copy it into any Python, or run it here: the first run downloads Python (~15 MB, needs internet), then works offline from the cache.</p>
+      <textarea id="pyCode" spellcheck="false" aria-label="Python code"></textarea>
+      <div class="row"><button class="btn run" id="pyRun">▶ Run Python</button><button class="btn" id="pyCopy">Copy</button><span class="mut small" id="pyState"></span></div>
+      <pre id="pyOut"></pre><div id="pyFigs"></div>
+    </div>
+  </section>
+</main>
+</body></html>

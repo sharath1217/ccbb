@@ -31,7 +31,7 @@ footer{padding:28px 0 40px;color:var(--mut);font-size:14px;border-top:1px solid 
   <div>
     <h1>Test your circuit <em>before</em> you buy the parts.</h1>
     <p class="lead">Build on a real-looking breadboard, run your Arduino, ESP32 or Pico code, measure with a multimeter and oscilloscope, and see mistakes (like a burnt LED) before they cost you money. Then get the exact shopping list with prices.</p>
-    <a class="cta" href="app/index.html">▶ Open Circuit Studio</a><a class="cta2" href="app/lab.html">📈 Circuit Lab</a><a class="cta2" href="app/asm51.html">🔢 8051 Assembly Lab</a><a class="cta2" href="#lessons">Start the lessons</a>
+    <a class="cta" href="app/index.html">▶ Open Circuit Studio</a><a class="cta2" href="app/lab.html">📈 Circuit Lab</a><a class="cta2" href="app/asm51.html">🔢 8051 Assembly Lab</a><a class="cta2" href="app/dsp.html">〰️ Signals &amp; Control Lab</a><a class="cta2" href="#lessons">Start the lessons</a>
     <div class="stats"><div><b>73</b>components</div><div><b>17</b>microcontrollers</div><div><b>11</b>real-world tools</div><div><b>17</b>projects</div><div><b>Free</b>works offline</div></div>
   </div>
   <img class="shot" src="screenshots/app-5-dimmer.png" alt="Circuit Studio showing an Arduino Uno wired to a breadboard with an LED, resistor and potentiometer, with code and serial monitor on the right">
@@ -108,6 +108,28 @@ footer{padding:28px 0 40px;color:var(--mut);font-size:14px;border-top:1px solid 
     <a class="lesson" href="app/index.html?project=mod_encoder"><div><span class="lvl">Modules</span><b>Rotary encoder</b><span>Quadrature: direction from CLK and DT.</span></div></a>
     <a class="lesson" href="app/index.html?project=mod_bt"><div><span class="lvl">Modules</span><b>HC-05 Bluetooth</b><span>Control an LED from a phone.</span></div></a>
     <a class="lesson" href="app/index.html?project=mod_rectifier"><div><span class="lvl">Power</span><b>Bridge rectifier</b><span>Transformer, diodes, filter ripple.</span></div></a>
+  </div>
+</section>
+
+<section id="signals">
+  <h2>Signals, DSP &amp; Control lab</h2><p class="sub">The MATLAB experiments of the VTU DSP and Control Systems labs, with plots, MATLAB-matching numbers and the same code in free Python (NumPy/SciPy).</p>
+  <div class="lessons">
+    <a class="lesson" href="app/dsp.html?e=sampling"><div><span class="lvl">DSP</span><b>Sampling & aliasing</b><span>Nyquist rate, apparent frequency.</span></div></a>
+    <a class="lesson" href="app/dsp.html?e=linconv"><div><span class="lvl">DSP</span><b>Linear convolution</b><span>y = x * h.</span></div></a>
+    <a class="lesson" href="app/dsp.html?e=circconv"><div><span class="lvl">DSP</span><b>Circular convolution</b><span>Time aliasing when N is small.</span></div></a>
+    <a class="lesson" href="app/dsp.html?e=corr"><div><span class="lvl">DSP</span><b>Autocorrelation</b><span>Energy and symmetry.</span></div></a>
+    <a class="lesson" href="app/dsp.html?e=dft"><div><span class="lvl">DSP</span><b>DFT / IDFT</b><span>Magnitude, phase, Parseval.</span></div></a>
+    <a class="lesson" href="app/dsp.html?e=spectrum"><div><span class="lvl">DSP</span><b>FFT spectrum</b><span>Find the tones in a signal.</span></div></a>
+    <a class="lesson" href="app/dsp.html?e=diffeq"><div><span class="lvl">DSP</span><b>Difference equation</b><span>Impulse, step, poles.</span></div></a>
+    <a class="lesson" href="app/dsp.html?e=fir"><div><span class="lvl">DSP</span><b>FIR filter design</b><span>Windows: Hamming, Hann, Blackman.</span></div></a>
+    <a class="lesson" href="app/dsp.html?e=iir"><div><span class="lvl">DSP</span><b>IIR Butterworth / Chebyshev</b><span>Bilinear transform.</span></div></a>
+    <a class="lesson" href="app/dsp.html?e=buttord"><div><span class="lvl">DSP</span><b>Filter from specifications</b><span>Minimum order N.</span></div></a>
+    <a class="lesson" href="app/dsp.html?e=second"><div><span class="lvl">Control</span><b>Second-order response</b><span>Overshoot, peak and settling time.</span></div></a>
+    <a class="lesson" href="app/dsp.html?e=tfstep"><div><span class="lvl">Control</span><b>Open vs closed loop</b><span>Poles and steady-state error.</span></div></a>
+    <a class="lesson" href="app/dsp.html?e=bode"><div><span class="lvl">Control</span><b>Bode plot & margins</b><span>Gain and phase margin.</span></div></a>
+    <a class="lesson" href="app/dsp.html?e=rlocus"><div><span class="lvl">Control</span><b>Root locus</b><span>Gain at the stability limit.</span></div></a>
+    <a class="lesson" href="app/dsp.html?e=routh"><div><span class="lvl">Control</span><b>Routh-Hurwitz</b><span>Stability from the table.</span></div></a>
+    <a class="lesson" href="app/dsp.html?e=pid"><div><span class="lvl">Control</span><b>PID tuning</b><span>Kp, Ki, Kd effects.</span></div></a>
   </div>
 </section>
 
