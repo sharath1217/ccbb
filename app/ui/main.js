@@ -70,6 +70,8 @@ function applyProps(p) {
   if (p.type === 'meter') el.mode = p.props.mode;
   if (p.type === 'battery') { el.volts = p.props.volts; el.render?.(); }
   if (p.type === 'psu') el.setAttribute('volts', p.props.volts);
+  if (p.type === 'transformer') el.setAttribute('vsec', p.props.vsec);
+  if (p.type === 'encoder') el.pressed = !!p.props.pressed;
   if (p.type === 'seg7') el.common = p.props.common;
   if (p.type === 'diode') el.setAttribute('kind', p.props.kind);
   if (p.type === 'capacitor') el.setAttribute('label', ({ 1e-9: '102', 1e-8: '103', 1e-7: '104', 1e-6: '105' })[p.props.farads] || '104');
@@ -250,6 +252,8 @@ function refreshProps() {
   }
   if (p.type === 'led' && p.props.burnt) f += '<button class="btn" id="pFix">Replace burnt LED</button>';
   if (p.type === 'dipswitch') f += `<label>Switches <span>${p.props.bits.map((b, i) => `<button class="btn mini" data-bit="${i}">${i + 1}:${b ? 'ON' : 'off'}</button>`).join('')}</span></label>`;
+  if (p.type === 'encoder') f += `<label>Turn the knob <span><button class="btn mini" data-enc="-1">⟲ 1 step</button> <button class="btn mini" data-enc="1">1 step ⟳</button> <button class="btn mini" data-enc="5">5 ⟳</button></span></label><div class="mut">Position ${p.state?.target ?? 0} detents · each detent sends one full Gray-code cycle on CLK/DT.</div>`;
+  if (p.type === 'hc05') f += `<div class="phone"><div class="mut">📱 Phone (Bluetooth terminal app) ${p.props.paired ? '· connected' : '· not paired'}</div><pre class="plog">${(p.state?.log || '').replace(/</g, '&lt;').slice(-600)}</pre><span class="row"><input id="pMsg" placeholder="message, e.g. 1 or ON" size="14"><button class="btn mini" id="pSend">Send</button></span></div>`;
   if (p.type === 'keypad') f += `<div class="mut">Click keys on the keypad. Pressing a key connects its row pin to its column pin.</div>`;
   if (p.type === 'pushbutton') f += `<div class="mut">Or click and hold the button on the board.</div>`;
   if (isMcu(p.type)) { const B = BOARDS[p.type]; f += `<div class="kv"><span>Logic level</span><b>${B.vcc} V</b><span>ADC</span><b>${B.adcBits}-bit (0–${2 ** B.adcBits - 1})</b><span>Built-in LED</span><b>${B.builtin}</b><span>I2C</span><b>SDA ${B.i2c.SDA} · SCL ${B.i2c.SCL}</b><span>Max per pin</span><b>${fmt(B.maxPin, 'A')}</b></div>`; }
@@ -267,6 +271,10 @@ function refreshProps() {
     p.props[x.dataset.k] = k.kind === 'select' && typeof k.options[0] !== 'number' ? x.value : +x.value; if (x.nextElementSibling) x.nextElementSibling.textContent = x.value + (k.unit ? ' ' + k.unit : ''); applyProps(p); changed(); };
   for (const x of box.querySelectorAll('[data-t]')) x.onclick = () => { p.props[x.dataset.t] = !p.props[x.dataset.t]; applyProps(p); changed(); refreshProps(); };
   for (const x of box.querySelectorAll('[data-bit]')) x.onclick = () => { p.props.bits[+x.dataset.bit] ^= 1; applyProps(p); changed(); refreshProps(); };
+  for (const x of box.querySelectorAll('[data-enc]')) x.onclick = () => { p.state ??= {}; p.state.target = (p.state.target ?? 0) + +x.dataset.enc; refreshProps(); };
+  if ($('pSend')) { const send = () => { const v = $('pMsg').value; if (!v) return; p.state ??= {}; if (!p.props.paired) { p.state.log = (p.state.log || '') + '[pair the module first]\n'; refreshProps(); return; }
+      p.state.inbox = (p.state.inbox || '') + v + '\n'; p.state.log = (p.state.log || '') + '> ' + v + '\n'; $('pMsg').value = ''; refreshProps(); $('pMsg')?.focus(); };
+    $('pSend').onclick = send; $('pMsg').onkeydown = e => { if (e.key === 'Enter') send(); }; }
   if ($('pFix')) $('pFix').onclick = () => { p.props.burnt = false; applyProps(p); changed(); refreshProps(); };
   $('pDel').onclick = () => removePart(p.id);
 }
@@ -275,7 +283,7 @@ function refreshProps() {
 let queued = false;
 function changed() { updateBoardLabel(); save(); setTimeout(pushHistory, 0); if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; runSim(); drawWires(); drawPins(); }); } }
 function markSeated() { for (const p of S.parts) els.get(p.id)?.host.classList.toggle('seated', S.wires.some(w => w.hidden && w.from.startsWith(p.id + ':'))); }
-const DYN = ['capacitor', 'ecap', 'ne555', 'heartbeat'];
+const DYN = ['capacitor', 'ecap', 'ne555', 'heartbeat', 'transformer'];
 // ---------- real-world environment: tools near sensors change what they measure ----------
 const SENSES = new Set(['dht22', 'ntc', 'lm35', 'ds18b20', 'bmp280', 'ldr', 'bh1750', 'flame', 'gas', 'mq135', 'sound', 'hcsr04', 'irobstacle', 'pir', 'heartbeat', 'hall', 'reed', 'touch', 'rain', 'soil', 'waterlevel', 'rc522']);
 function centerCm(p) { const r = els.get(p.id); const w = r?.el.offsetWidth || 40, h = r?.el.offsetHeight || 40; return { x: (p.x + w / 2) / PX_PER_CM, y: (p.y + h / 2) / PX_PER_CM }; }
@@ -316,6 +324,9 @@ let lastFrame = performance.now(), envTick = 0;
 (function animate() {
   flowOffset -= 1;
   const now = performance.now(), frame = Math.min(0.05, (now - lastFrame) / 1000); lastFrame = now;
+  // rotary encoders: step the contacts through the Gray code, one phase every 40 ms, toward the target detent
+  for (const p of S.parts) if (p.type === 'encoder' && p.state && (p.state.phase ?? 0) !== (p.state.target ?? 0) * 4 && now - (p.state.tPhase || 0) > 40) {
+    p.state.phase = (p.state.phase ?? 0) + Math.sign((p.state.target ?? 0) * 4 - (p.state.phase ?? 0)); p.state.tPhase = now; runSim(); }
   // run the 8051 first so everything it outputs this frame is ready before the scopes sample
   if (S.asmRun && !S.asmRun.cpu.halted) { const r = S.asmRun; try { r.cpu.run(Math.max(1, Math.round(frame * r.cpu.xtal / 12))); } catch (e) { showErr('8051 stopped: ' + e.message); r.cpu.halted = true; } r.flush(); }
   if (isDynamic() && S.ready) {                     // real-time transient simulation (capacitors, 555, pulse sensor)
@@ -429,6 +440,8 @@ const mcuPart = () => S.parts.find(p => isMcu(p.type));
 const board = () => { const m = mcuPart(); return m ? BOARDS[m.type] : null; };
 const flameHeat = l => (l > 0 ? Math.min(120, 150 / l) : 0);
 const sameNode = (a, b) => S.sim && S.sim.sameNode(a, b);
+// connected directly or through a series resistor (e.g. the 1 kΩ of a level-shifting divider)
+const linked = (a, b) => sameNode(a, b) || S.parts.some(r => r.type === 'resistor' && (r.props.ohms ?? 0) <= 10000 && ((sameNode(r.id + ':1', a) && sameNode(r.id + ':2', b)) || (sameNode(r.id + ':2', a) && sameNode(r.id + ':1', b))));
 const powered = (p, vcc, gnd, min) => S.sim && S.sim.voltAt(p.id, vcc) - S.sim.voltAt(p.id, gnd) >= min;
 const io = {
   pinMode(pin, mode) { S.io.pins[pin] = { mode, v: 0 }; runSim(); },
@@ -444,7 +457,10 @@ const io = {
     const max = 2 ** B.adcBits - 1; return Math.max(0, Math.min(max, Math.round(S.sim.voltAt(m.id, pin) / B.adcRef * max))); },
   pulseIn(pin) { const m = mcuPart(); const h = S.parts.find(p => p.type === 'hcsr04' && sameNode(p.id + ':ECHO', m.id + ':' + pin));
     if (!h || !powered(h, 'VCC', 'GND', 4.5)) return 0; const d = h.props.dist ?? 50; return d < 2 || d > 400 ? 0 : Math.round(d * 2 / 0.0343); },
-  serial: t => serial(t),
+  serial(t) { serial(t); if (S.parts.some(p => p.type === 'hc05') && mcuPart()) io.lib.btSend('1', t); },   // TX (pin 1) also reaches an HC-05 wired to it
+  serialIn() { let t = serialInBuf; serialInBuf = ''; const m = mcuPart(); const B = m && BOARDS[m.type];
+    if (m) for (const d of S.parts.filter(q => q.type === 'hc05')) if (d.state?.inbox && sameNode(d.id + ':TXD', m.id + ':' + (B.rx || '0'))) { t += d.state.inbox; d.state.inbox = ''; }
+    return t; },
   tone(pin, f) { const m = mcuPart(); for (const b of S.parts.filter(q => q.type === 'pbuzzer' && (sameNode(q.id + ':1', m.id + ':' + pin) || sameNode(q.id + ':2', m.id + ':' + pin)))) { b.state.freq = f; els.get(b.id).el.hasSignal = true; } io.digitalWrite(pin, 1); },
   noTone(pin) { const m = mcuPart(); for (const b of S.parts.filter(q => q.type === 'pbuzzer')) { if (sameNode(b.id + ':1', m.id + ':' + pin) || sameNode(b.id + ':2', m.id + ':' + pin)) { b.state.freq = 0; els.get(b.id).el.hasSignal = false; } } io.digitalWrite(pin, 0); },
   lib: {
@@ -459,6 +475,20 @@ const io = {
       return d ? effOf(d).props.card : null; },
     neopixel(pin, colors) { const m = mcuPart(); for (const d of S.parts.filter(p => (p.type === 'neopixel' || p.type === 'ring') && sameNode(p.id + ':DIN', m.id + ':' + pin))) { const el = els.get(d.id).el; d.state.colors = colors;
       if (d.type === 'neopixel') { const [r, g, b] = colors[0] || [0, 0, 0]; el.r = r / 255; el.g = g / 255; el.b = b / 255; } else colors.forEach((c, i) => el.setPixel?.(i, { r: c[0] / 255, g: c[1] / 255, b: c[2] / 255 })); } },
+    tm1637(clk, dio, segs, bright) { const m = mcuPart();
+      for (const d of S.parts.filter(p => p.type === 'tm1637' && sameNode(p.id + ':CLK', m.id + ':' + clk) && sameNode(p.id + ':DIO', m.id + ':' + dio))) {
+        const ok = powered(d, 'VCC', 'GND', 3); d.state.segs = ok ? segs : [0, 0, 0, 0]; const el = els.get(d.id).el; el.setAttribute('segs', d.state.segs.join(',')); el.setAttribute('bright', bright); } },
+    max7219(din, clk, cs, addr, rows) { const m = mcuPart(); if (addr) return;
+      for (const d of S.parts.filter(p => p.type === 'max7219' && sameNode(p.id + ':DIN', m.id + ':' + din) && sameNode(p.id + ':CLK', m.id + ':' + clk) && sameNode(p.id + ':CS', m.id + ':' + cs))) {
+        d.state.rows = powered(d, 'VCC', 'GND', 4) ? rows : Array(8).fill(0); els.get(d.id).el.setAttribute('rows', d.state.rows.join(',')); } },
+    hx711(dout, sck) { const m = mcuPart(); const d = S.parts.find(p => p.type === 'hx711' && sameNode(p.id + ':DT', m.id + ':' + dout) && sameNode(p.id + ':SCK', m.id + ':' + sck));
+      if (!d || !powered(d, 'VCC', 'GND', 2.6)) return null;
+      return Math.round(8421 + (d.props.grams ?? 0) * 420); },   // 5 kg load cell at gain 128: about 420 counts per gram, plus a zero offset
+    btPoll(rx) { const m = mcuPart(); let t = '';
+      for (const d of S.parts.filter(p => p.type === 'hc05' && sameNode(p.id + ':TXD', m.id + ':' + rx) && powered(p, 'VCC', 'GND', 3.6))) if (d.state.inbox) { t += d.state.inbox; d.state.inbox = ''; }
+      return t; },
+    btSend(tx, text) { const m = mcuPart();
+      for (const d of S.parts.filter(p => p.type === 'hc05' && linked(p.id + ':RXD', m.id + ':' + tx) && powered(p, 'VCC', 'GND', 3.6) && p.props.paired)) { d.state.log = ((d.state.log || '') + text).slice(-2000); if (S.selected?.part === d.id) refreshPropsLive(); } },
     servo(pin, a) { const m = mcuPart(); for (const sv of S.parts.filter(p => p.type === 'servo' && sameNode(p.id + ':PWM', m.id + ':' + pin))) { sv.state.angle = a; els.get(sv.id).el.angle = a; } },
     lcd(addr, rows, bl) { const m = mcuPart(), B = board();
       for (const d of S.parts.filter(p => (p.type === 'lcd' || p.type === 'lcd2004') && sameNode(p.id + ':SDA', m.id + ':' + B.i2c.SDA) && sameNode(p.id + ':SCL', m.id + ':' + B.i2c.SCL))) {
@@ -540,16 +570,19 @@ function drawOled(el, ops) {
   el.imageData = img; el.redraw?.();
 }
 const warnedPwm = new Set();
-let serialBuf = '';
+let serialBuf = '', serialInBuf = '';
 function serial(t) { serialBuf = (serialBuf + t).slice(-6000); const s = $('serial'); s.textContent = serialBuf; s.scrollTop = 1e9; }
 $('btnClear').onclick = () => { serialBuf = ''; $('serial').textContent = ''; };
+const sendSerial = () => { const v = $('serialIn').value; if (!S.runner) { serial('[start the code first]\n'); return; } serialInBuf += v + ($('serialNl').checked ? '\n' : ''); $('serialIn').value = ''; };
+$('serialSend').onclick = sendSerial; $('serialIn').onkeydown = e => { if (e.key === 'Enter') sendSerial(); };
 function wrapIo(B) { // translate pin numbers used in code (e.g. 2, D4, GP25, PC13) to the board's pin names
   const P = v => B.pin(v); return { ...io, pinMode: (p, m) => io.pinMode(P(p), m), digitalWrite: (p, v) => io.digitalWrite(P(p), v), analogWrite: (p, v) => io.analogWrite(P(p), v),
     digitalRead: p => io.digitalRead(P(p)), analogRead: p => io.analogRead(P(p)), pulseIn: p => io.pulseIn(P(p)), tone: p => io.tone(P(p)), noTone: p => io.noTone(P(p)),
     lib: { ...io.lib, dht: p => io.lib.dht(P(p)), servo: (p, a) => io.lib.servo(P(p), a) } }; }
 $('btnRun').onclick = async () => {
   stopCode(); $('err').hidden = true;
-  const m = mcuPart(); if (!m) { showErr('Add a microcontroller (Arduino, ESP32, Pico…) first: your code runs on it.'); return; }
+  const m = mcuPart(); if (!m) { if (!/\bvoid\s+\w+\s*\(/.test($('src').value) && S.parts.length) { serial('[This circuit has no microcontroller: it is already running live. Change parts and watch the meters and scope.]\n'); return; }
+    showErr('Add a microcontroller (Arduino, ESP32, Pico…) first: your code runs on it.'); return; }
   const B = BOARDS[m.type];
   S.io = { mcu: m.id, pins: {} }; warnedPwm.clear(); serial('');
   let src = $('src').value, ioB = wrapIo(B);

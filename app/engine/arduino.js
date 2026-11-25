@@ -3,7 +3,7 @@
 // delay, millis, micros, Serial.print/println, tone/noTone, map, constrain, random, #define,
 // global/local variables, arrays, user functions, pulseIn, and these libraries: DHT, Servo,
 // LiquidCrystal_I2C, Adafruit_SSD1306 (text + basic shapes). Not supported: your own classes, pointers.
-export const LIBS = ['LiquidCrystal', 'DHT', 'Servo', 'LiquidCrystal_I2C', 'Adafruit_SSD1306', 'OneWire', 'DallasTemperature', 'Adafruit_BMP280', 'BH1750', 'MFRC522', 'Adafruit_NeoPixel'];
+export const LIBS = ['LiquidCrystal', 'DHT', 'Servo', 'LiquidCrystal_I2C', 'Adafruit_SSD1306', 'OneWire', 'DallasTemperature', 'Adafruit_BMP280', 'BH1750', 'MFRC522', 'Adafruit_NeoPixel', 'TM1637Display', 'LedControl', 'HX711', 'SoftwareSerial'];
 const TYPES = '(?:unsigned\\s+)?(?:int|long|float|double|bool|boolean|byte|char|String|uint8_t|uint16_t|uint32_t|int8_t|int16_t|int32_t|word|short|size_t)';
 const FN_TYPES = '(?:void|' + TYPES + ')';
 
@@ -75,6 +75,9 @@ export function transpile(src) {
     const ps = params.trim() === 'void' ? '' : params.split(',').map(x => x.trim().split(/\s+/).pop().replace(/[\[\]&*]/g, '')).filter(Boolean).join(', ');
     return `async function ${name}(${ps}) {`;
   });
+  s = s.replace(/\b([A-Za-z_]\w*)\.(trim|toUpperCase|toLowerCase)\(\)\s*;/g, '$1 = $1.$2();');   // Arduino String methods change the string in place
+  s = s.replace(/\(\s*(?:unsigned\s+)?(?:int|long|byte|short|char|uint8_t|uint16_t|int16_t|uint32_t|int32_t)\s*\)\s*([A-Za-z_]\w*(?:\.\w+)?(?:\([^()]*\))?|\([^()]*\))/g, '__int($1)');
+  s = s.replace(/\(\s*(?:float|double)\s*\)\s*(?=[\w(])/g, '');
   s = s.replace(/\b(millis|micros)\(\)\s*\/\s*(\d+)(?![.\d])/g, '__int($1() / $2)');   // millis() / 1000 is integer division in C
   const INTS = '(?:unsigned\\s+)?(?:int|long|byte|short|word|uint8_t|uint16_t|uint32_t|int8_t|int16_t|int32_t|size_t)';
   s = s.replace(new RegExp('\\b((?:static\\s+)?(?:const\\s+)?' + INTS + ')\\s+([A-Za-z_]\\w*)\\s*=\\s*([^;{}]+);', 'g'), (m, t, n, e) =>
@@ -107,7 +110,7 @@ export function createRunner(io, { speed = 1, now = () => performance.now(), sle
   let stopped = false, t0 = 0, lastYield = 0, spinDebt = 0, inIsr = false; const isrTable = {};
   const realSleep = sleep || (ms => new Promise(r => setTimeout(r, ms)));
   const delay = async ms => { if (stopped) throw new Stop(); await realSleep(Math.max(0, ms) / speed); if (stopped) throw new Stop(); };
-  const pin = p => String(p);
+  const pin = p => String(p); let rxq = '';
   const api = {
     HIGH: 1, LOW: 0, OUTPUT: 'OUTPUT', INPUT: 'INPUT', INPUT_PULLUP: 'INPUT_PULLUP', LED_BUILTIN: 13, true: true, false: false,
     MSBFIRST: 1, LSBFIRST: 0, A0: 'A0', A1: 'A1', A2: 'A2', A3: 'A3', A4: 'A4', A5: 'A5', DEC: 10, HEX: 16, BIN: 2, PI: Math.PI,
@@ -121,6 +124,40 @@ export function createRunner(io, { speed = 1, now = () => performance.now(), sle
     Servo: class { attach(p) { this.pin = pin(p); this.a = 90; return 1; } detach() { this.pin = null; } attached() { return !!this.pin; }
       write(a) { this.a = Math.max(0, Math.min(180, Math.round(a))); if (this.pin) io.lib?.servo?.(this.pin, this.a); }
       writeMicroseconds(us) { this.write((us - 544) / (2400 - 544) * 180); } read() { return this.a; } },
+    TM1637Display: class { constructor(clk, dio) { this.clk = pin(clk); this.dio = pin(dio); this.segs = [0, 0, 0, 0]; this.bright = 7; this.on = true; }
+      push() { io.lib?.tm1637?.(this.clk, this.dio, this.on ? this.segs.slice() : [0, 0, 0, 0], this.bright); }
+      setBrightness(b, on = true) { this.bright = Math.max(0, Math.min(7, b)); this.on = !!on; }
+      encodeDigit(d) { return [0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F, 0x77, 0x7C, 0x39, 0x5E, 0x79, 0x71][d & 15]; }
+      setSegments(arr, len = 4, pos = 0) { for (let i = 0; i < len && pos + i < 4; i++) this.segs[pos + i] = arr[i] & 255; this.push(); }
+      clear() { this.segs = [0, 0, 0, 0]; this.push(); }
+      showNumberDec(n, lz = false, len = 4, pos = 0) { this.showNumberDecEx(n, 0, lz, len, pos); }
+      showNumberDecEx(n, dots = 0, lz = false, len = 4, pos = 0) { n = Math.trunc(n); const neg = n < 0; let v = Math.abs(n); const out = Array(len).fill(0);
+        for (let i = len - 1; i >= 0; i--) { const d = v % 10; out[i] = (v || lz || i === len - 1) ? this.encodeDigit(d) : 0; v = Math.floor(v / 10); }
+        if (neg) { const k = out.findIndex(x => x); if (k > 0) out[k - 1] = 0x40; }
+        for (let i = 0; i < len; i++) if ((dots << i) & 0x80) out[i] |= 0x80;   // TM1637Display: 0b01000000 lights the colon (dot after digit 2)
+        this.setSegments(out, len, pos); }
+      showNumberHexEx(n, dots = 0, lz = false, len = 4, pos = 0) { const out = []; for (let i = len - 1; i >= 0; i--) out[i] = this.encodeDigit((n >> ((len - 1 - i) * 4)) & 15); this.setSegments(out, len, pos); } },
+    LedControl: class { constructor(din, clk, cs, n = 1) { Object.assign(this, { din: pin(din), clk: pin(clk), cs: pin(cs), n }); this.rows = Array.from({ length: n }, () => Array(8).fill(0)); this.off = Array(n).fill(true); }
+      push(a) { io.lib?.max7219?.(this.din, this.clk, this.cs, a, this.off[a] ? Array(8).fill(0) : this.rows[a].slice()); }
+      getDeviceCount() { return this.n; } shutdown(a, b) { this.off[a] = !!b; this.push(a); } setIntensity() {} setScanLimit() {}
+      clearDisplay(a) { this.rows[a] = Array(8).fill(0); this.push(a); }
+      setLed(a, r, c, on) { const m = 0x80 >> c; this.rows[a][r] = on ? this.rows[a][r] | m : this.rows[a][r] & ~m; this.push(a); }
+      setRow(a, r, v) { this.rows[a][r] = v & 255; this.push(a); }
+      setColumn(a, c, v) { for (let r = 0; r < 8; r++) this.setLed(a, r, c, (v >> (7 - r)) & 1); } },
+    HX711: class { constructor() { this.offset = 0; this.scale = 1; }
+      begin(dout, sck) { this.dout = pin(dout); this.sck = pin(sck); }
+      raw() { const v = io.lib?.hx711?.(this.dout, this.sck); return v === null || v === undefined ? null : v; }
+      is_ready() { return this.raw() !== null; } wait_ready() {}
+      read() { return this.raw() ?? 0; } read_average(n = 10) { return this.read(); }
+      get_value(n = 1) { return this.read_average(n) - this.offset; } get_units(n = 1) { return this.get_value(n) / this.scale; }
+      tare(n = 10) { this.offset = this.read_average(n); } set_scale(s = 1) { this.scale = s || 1; } get_scale() { return this.scale; }
+      set_offset(o) { this.offset = o; } get_offset() { return this.offset; } power_down() {} power_up() {} },
+    SoftwareSerial: class { constructor(rx, tx) { this.rx = pin(rx); this.tx = pin(tx); this.q = ''; }
+      begin() {} listen() { return true; } pull() { this.q += io.lib?.btPoll?.(this.rx) || ''; }
+      available() { this.pull(); return this.q.length; } read() { this.pull(); if (!this.q) return -1; const c = this.q.charCodeAt(0); this.q = this.q.slice(1); return c; }
+      peek() { this.pull(); return this.q ? this.q.charCodeAt(0) : -1; }
+      readString() { this.pull(); const t = this.q; this.q = ''; return t; } readStringUntil(ch) { this.pull(); const c = typeof ch === 'number' ? String.fromCharCode(ch) : ch, k = this.q.indexOf(c); const t = k < 0 ? this.q : this.q.slice(0, k); this.q = k < 0 ? '' : this.q.slice(k + 1); return t; }
+      write(v) { io.lib?.btSend?.(this.tx, typeof v === 'number' ? String.fromCharCode(v) : String(v)); } print(v) { io.lib?.btSend?.(this.tx, fmtNum(v)); } println(v = '') { io.lib?.btSend?.(this.tx, fmtNum(v) + '\n'); } },
     LiquidCrystal_I2C: class { constructor(addr = 0x27, cols = 16, rows = 2) { Object.assign(this, { addr, cols, rows, x: 0, y: 0, bl: true }); this.buf = Array.from({ length: rows }, () => ' '.repeat(cols)); }
       push() { io.lib?.lcd?.(this.addr, this.buf.slice(), this.bl); }
       init() { this.push(); } begin() { this.push(); } backlight() { this.bl = true; this.push(); } noBacklight() { this.bl = false; this.push(); }
@@ -185,7 +222,12 @@ export function createRunner(io, { speed = 1, now = () => performance.now(), sle
     constrain: (x, a, b) => Math.min(Math.max(x, a), b), min: Math.min, max: Math.max, abs: Math.abs, sqrt: Math.sqrt, pow: Math.pow,
     random: (a, b) => b === undefined ? Math.floor(Math.random() * a) : Math.floor(a + Math.random() * (b - a)),
     randomSeed: () => {},
-    Serial: { begin: () => {}, available: () => 0, read: () => -1,
+    Serial: { begin: () => {}, pull() { rxq += io.serialIn?.() || ''; }, available() { this.pull(); return rxq.length; }, read() { this.pull(); if (!rxq) return -1; const c = rxq.charCodeAt(0); rxq = rxq.slice(1); return c; },
+      peek() { this.pull(); return rxq ? rxq.charCodeAt(0) : -1; }, readString() { this.pull(); const t = rxq; rxq = ''; return t; },
+      readStringUntil(ch) { this.pull(); const c = typeof ch === 'number' ? String.fromCharCode(ch) : ch, k = rxq.indexOf(c); const t = k < 0 ? rxq : rxq.slice(0, k); rxq = k < 0 ? '' : rxq.slice(k + 1); return t; },
+      parseInt() { this.pull(); const m = /^\D*?(-?\d+)/.exec(rxq); if (!m) { rxq = ''; return 0; } rxq = rxq.slice(m.index + m[0].length); return +m[1]; },
+      parseFloat() { this.pull(); const m = /^[^\d-]*?(-?\d+(?:\.\d+)?)/.exec(rxq); if (!m) { rxq = ''; return 0; } rxq = rxq.slice(m.index + m[0].length); return { __float: +m[1] }; },
+      write: v => io.serial(typeof v === 'number' ? String.fromCharCode(v) : String(v)), flush() {},
       print: (v, base) => io.serial(fmtNum(v, base)), println: (v = '', base) => io.serial(fmtNum(v, base) + '\n') },
   };
   // Arduino: print(int, base) for base 2/8/16, print(float, digits) otherwise

@@ -1,3 +1,4 @@
+import { MODULE_PROJECTS } from './module-projects.js';
 import { DIGITAL_PROJECTS } from './digital-projects.js';
 import { LOGIC_ICS } from '../engine/logic-ics.js';
 // Parts the student can place, and starter projects.
@@ -103,6 +104,12 @@ export const CATALOG = [
   { type: 'lcd2004', tag: 'wokwi-lcd2004', attrs: { pins: 'i2c' }, name: 'LCD 20×4 (I2C)', group: 'Output', props: {}, desc: 'Address 0x27 · LiquidCrystal_I2C(0x27, 20, 4)', price: [350, 500] },
   { type: 'relaymod', tag: 'cb-module', attrs: { label: 'Relay module', pins: 'VCC,GND,IN,COM,NO,NC', color: '#1d4ed8' }, name: 'Relay module (1-ch)', group: 'Output', props: {}, desc: 'Transistor + diode built in · IN LOW = ON', price: [50, 80] },
   { type: 'lcdpar', tag: 'wokwi-lcd1602', name: 'LCD 16×2 (parallel)', group: 'Output', props: {}, desc: 'HD44780 · 8-bit or 4-bit bus · 8051 / LiquidCrystal', price: [120, 180] },
+  { type: 'tm1637', tag: 'cb-tm1637', name: 'TM1637 4-digit display', group: 'Output', props: {}, desc: '4 × 7-segment with colon · only CLK + DIO · TM1637Display library', price: [60, 100] },
+  { type: 'max7219', tag: 'cb-matrix', name: 'MAX7219 8×8 LED matrix', group: 'Output', props: {}, desc: 'SPI-like DIN/CS/CLK · LedControl library', price: [90, 150] },
+  { type: 'hx711', tag: 'wokwi-hx711', name: 'HX711 + load cell', group: 'Sensors', props: { grams: 500 }, desc: '24-bit ADC for weighing scales · 5 kg load cell', price: [150, 300], controls: [R('Weight on the scale', 'grams', 0, 5000, 10, 'g')] },
+  { type: 'encoder', tag: 'wokwi-ky-040', name: 'Rotary encoder KY-040', group: 'Input', props: { pressed: false }, desc: 'Quadrature CLK/DT, push switch SW · 20 detents/turn', price: [40, 80], controls: [T('Push switch', 'pressed', 'Pressed', 'Released')] },
+  { type: 'hc05', tag: 'cb-module', attrs: { label: 'HC-05 Bluetooth', pins: 'STATE,RXD,TXD,GND,VCC,EN', color: '#1e3a8a' }, name: 'HC-05 Bluetooth module', group: 'Communication', props: { paired: true }, desc: 'Serial ↔ phone at 9600 baud · RXD is 3.3 V', price: [250, 400], controls: [T('Phone', 'paired', 'Paired', 'Not paired')] },
+  { type: 'transformer', tag: 'cb-transformer', name: 'Step-down transformer', group: 'Power', props: { vsec: 12 }, desc: '230 V AC mains → 12-0-12 V AC, 50 Hz', price: [150, 250], controls: [M('Secondary', 'vsec', [6, 9, 12, 15])] },
   { type: 'dac0808', tag: 'cb-module', attrs: { label: 'DAC0808', pins: 'D7,D6,D5,D4,D3,D2,D1,D0,VCC,GND,OUT', color: '#1e3a8a' }, name: 'DAC0808 module', group: 'Output', props: {}, desc: '8-bit digital → analog · OUT = 5 V × code / 256', price: [60, 120] },
   { type: 'adc0804', tag: 'cb-module', attrs: { label: 'ADC0804', pins: 'VIN,VCC,GND,D7,D6,D5,D4,D3,D2,D1,D0', color: '#065f46' }, name: 'ADC0804 module', group: 'Sensors', props: {}, desc: 'Analog → 8-bit · code = 255 × VIN / 5 V', price: [80, 150] },
   { type: 'stepper', tag: 'cb-stepper', name: 'Stepper motor + ULN2003', group: 'Output', props: {}, desc: '28BYJ-48 · 2048 full steps per turn · 5 V', price: [150, 250] },
@@ -489,4 +496,5 @@ void loop() {
   delay(500);
 }` },
   ...DIGITAL_PROJECTS,
+  ...MODULE_PROJECTS,
 };

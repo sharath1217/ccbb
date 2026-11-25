@@ -375,7 +375,7 @@ await test('Home page: every lesson link opens its project without errors', asyn
   const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } }); const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.goto(base.replace('app/index.html', 'index.html')); if (SHOTS) await p.screenshot({ path: path.join(root, 'screenshots', 'home.png'), fullPage: true });
   const links = await p.locator('a.lesson').evaluateAll(as => as.map(a => a.href));
-  assert(links.length === 50, 'lessons ' + links.length);
+  assert(links.length === 56, 'lessons ' + links.length);
   for (const l of links.filter(x => x.includes('project='))) { await p.goto(l); await p.waitForFunction(() => window.ccbb && window.ccbb.S.ready, null, { timeout: 15000 });
     assert(await p.locator('.part').count() > 1, 'empty project ' + l); }
   const man = JSON.parse(fs.readFileSync(path.join(root, 'app/manifest.webmanifest'), 'utf8')); assert(man.name && man.icons.length && man.start_url, 'manifest');
@@ -517,6 +517,22 @@ await test('Digital lab: 7490 counter counts on the 7-segment, 595 latches shift
   await press(true); assert(!(await Q()), 'next edge stores D = 0'); await f.close();
   const a = await page('dig_adder'); const sum = (await a.evaluate(() => window.ccbb.S.sim.parts.bar1.values)).slice(0, 5).map(x => (x ? 1 : 0));
   assert(sum.join('') === '11010', '5 + 6 = 11 → S1..C4 ' + sum.join('')); await a.close();
+});
+
+await test('Modules: TM1637, MAX7219, HX711, encoder, HC-05 phone and the bridge rectifier', async () => {
+  const run = async k => { const p = await page(k); await p.evaluate(() => document.getElementById('btnRun').click()); await p.waitForTimeout(1500); return p; };
+  const st = (p, id) => p.evaluate(id => window.ccbb.S.parts.find(x => x.id === id).state, id), ser = p => p.evaluate(() => document.getElementById('serial').textContent);
+  let p = await run('mod_tm1637'); const segs = (await st(p, 'disp1')).segs; assert(segs && segs[0] === 0x3F && (segs[1] & 0x7F) === 0x3F, 'stopwatch shows 00:0x ' + segs); await shot(p, '27-tm1637'); await p.close();
+  p = await run('mod_matrix'); const rows = (await st(p, 'mx1')).rows; assert(rows && ['60,66,165,129,165,153,66,60', '0,102,255,255,255,126,60,24'].includes(rows.join()), 'smiley/heart rows ' + rows); await p.close();
+  p = await run('mod_scale'); await p.evaluate(() => { window.ccbb.S.parts.find(x => x.id === 'hx1').props.grams = 1250; }); await p.waitForTimeout(1300);
+  assert(/Weight: 1250\.0 g/.test(await ser(p)), 'scale: ' + (await ser(p)).slice(-80)); await p.close();
+  p = await run('mod_encoder'); await p.evaluate(() => { window.ccbb.S.parts.find(x => x.id === 'enc1').state.target = 3; }); await p.waitForTimeout(1700);
+  await p.evaluate(() => { window.ccbb.S.parts.find(x => x.id === 'enc1').state.target = 2; }); await p.waitForTimeout(800);
+  assert(/Position: 1\nPosition: 2\nPosition: 3\nPosition: 2/.test(await ser(p)), 'encoder: ' + await ser(p)); await p.close();
+  p = await run('mod_bt'); await p.click('[data-id="bt1"]', { force: true }).catch(() => {}); await p.evaluate(() => window.ccbb.S.parts.find(x => x.id === 'bt1').state.inbox = 'ON\n'); await p.waitForTimeout(900);
+  assert((await st(p, 'bt1')).log.includes('LED is ON') && await ledOn(p, 'led1'), 'bluetooth: ' + (await st(p, 'bt1')).log); await p.close();
+  p = await page('mod_rectifier'); await p.waitForTimeout(2500); const sc = await p.evaluate(() => document.querySelector('[data-id="sc1"] cb-scope').textContent);
+  const vmax = parseFloat((sc.match(/CH1max ([\d.]+)V/) || [])[1]); assert(vmax > 14.8 && vmax < 16, 'rectified DC ' + sc); await shot(p, '28-rectifier'); await p.close();
 });
 
 await test('Code panel minimizes and restores', async () => {

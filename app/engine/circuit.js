@@ -56,6 +56,7 @@ function mcuModel(type) {
 }
 
 // helper for sensor modules: output = source referenced to the module's own supply
+const popcount = b => { let n = 0; for (; b; b &= b - 1) n++; return n; };
 const supply = (c, vcc = 'VCC', gnd = 'GND') => c.v(vcc) - c.v(gnd);
 
 // LED-like part with any colour
@@ -312,6 +313,26 @@ export const MODELS = {
       if (supply(c) < 4 && (p.state.coils || []).some(Boolean)) W('warn', 'Stepper (ULN2003 board) needs 5 V on VCC to turn.');
       for (const m of c.mcuPinsOn(['VCC'])) W('warn', `Stepper motor powered from pin ${m}: use the 5V supply, a pin cannot provide coil current.`); } },
   // ---------- displays & modules on I2C (driven by code libraries) ----------
+  // ---------- Phase 4 modules ----------
+  tm1637: { pins: ['CLK', 'DIO', 'VCC', 'GND'], elements: p => { const lit = (p.state.segs || []).reduce((a, b) => a + popcount(b & 0x7F), 0);
+      return [R('VCC', 'GND', lit ? 5 / (0.002 + lit * 0.0025) : 2500, 'iq'), R('CLK', 'VCC', 10000, 'puc'), R('DIO', 'VCC', 10000, 'pud')]; },   // ≈2.5 mA per lit segment
+    check(p, c, W) { const vs = supply(c); if (vs > 0.3 && vs < 3) W('warn', `TM1637 needs 3.3–5 V (now ${vs.toFixed(1)} V).`); } },
+  max7219: { pins: ['VCC', 'GND', 'DIN', 'CS', 'CLK'], elements: p => { const lit = (p.state.rows || []).reduce((a, b) => a + popcount(b), 0);
+      return [R('VCC', 'GND', 5 / (0.01 + lit * 0.004), 'iq'), R('DIN', 'GND', 1e7, 'in1'), R('CS', 'GND', 1e7, 'in2'), R('CLK', 'GND', 1e7, 'in3')]; },
+    check(p, c, W) { const vs = supply(c); if (vs > 0.3 && vs < 4) W('warn', `MAX7219 needs 4–5.5 V (now ${vs.toFixed(1)} V).`);
+      const lit = (p.state.rows || []).reduce((a, b) => a + popcount(b), 0); if (lit > 40) W('info', `MAX7219 with ${lit} LEDs lit draws about ${Math.round(10 + lit * 4)} mA: power big displays from a separate 5 V supply, not a USB pin.`); } },
+  hx711: { pins: ['VCC', 'DT', 'SCK', 'GND'], elements: () => [R('VCC', 'GND', 3300, 'iq'), R('SCK', 'GND', 1e7, 'sck')],
+    check(p, c, W) { const vs = supply(c); if (vs > 0.3 && vs < 2.6) W('warn', `HX711 needs 2.6–5.5 V (now ${vs.toFixed(1)} V).`); } },
+  encoder: { pins: ['CLK', 'DT', 'SW', 'VCC', 'GND'],
+    // KY-040: 10 kΩ pull-ups on CLK and DT; the contacts short them to GND following the Gray code; SW shorts to GND when pushed
+    elements: p => { const ph = [[1, 1], [0, 1], [0, 0], [1, 0]][((p.state.phase || 0) % 4 + 4) % 4];
+      return [R('CLK', 'VCC', 10000, 'puc'), R('DT', 'VCC', 10000, 'pud'), ...(ph[0] ? [] : [R('CLK', 'GND', 0.5, 'cc')]), ...(ph[1] ? [] : [R('DT', 'GND', 0.5, 'cd')]), ...(p.props.pressed ? [R('SW', 'GND', 0.5, 'sw')] : [])]; } },
+  hc05: { pins: ['STATE', 'RXD', 'TXD', 'GND', 'VCC', 'EN'], elements: (p, c) => { const vs = supply(c), on = vs > 3.5;
+      return [R('VCC', 'GND', on ? 125 : 1e6, 'iq'), on ? Src('TXD', 'GND', 3.3, 1000, 'tx') : R('TXD', 'GND', OPEN, 'tx'), R('RXD', 'GND', 1e7, 'rx'), on ? Src('STATE', 'GND', p.props.paired ? 3.3 : 0, 1000, 'st') : R('STATE', 'GND', OPEN, 'st')]; },   // ~40 mA while pairing
+    check(p, c, W) { const vs = supply(c); if (vs > 0.3 && vs < 3.6) W('warn', `HC-05 module needs 3.6–6 V on VCC (now ${vs.toFixed(1)} V).`);
+      if (vs > 3.6 && c.v('RXD') - c.v('GND') > 3.6) W('warn', 'HC-05 RXD is a 3.3 V input: use a 1 kΩ / 2 kΩ divider from the Arduino TX pin.'); } },
+  transformer: { dyn: true, pins: ['S1', 'CT', 'S2'], elements(p, c) { const vp = (p.props.vsec ?? 12) * Math.SQRT2, v = vp * Math.sin(2 * Math.PI * 50 * c.t);
+      return [Src('S1', 'CT', v, 0.8, 'w1'), Src('CT', 'S2', v, 0.8, 'w2')]; } },   // 50 Hz mains, ~0.8 Ω winding resistance per half
   lcd: { pins: ['GND', 'VCC', 'SDA', 'SCL'], elements: () => [R('VCC', 'GND', 250, 'backlight'), R('SDA', 'GND', 1e7, 'sda'), R('SCL', 'GND', 1e7, 'scl')],
     check(p, c, W) { const vs = supply(c); if (vs > 0.3 && vs < 4.5) W('warn', `LCD 16×2 needs 5 V (now ${vs.toFixed(1)} V): text will be faint or missing.`); } },
   oled: { pins: ['DATA', 'CLK', 'DC', 'RST', 'CS', '3V3', 'VIN', 'GND'], elements: () => [R('VIN', 'GND', 250, 'iq'), R('DATA', 'GND', 1e7, 'sda'), R('CLK', 'GND', 1e7, 'scl')] },

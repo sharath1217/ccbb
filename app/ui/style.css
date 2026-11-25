@@ -78,3 +78,7 @@ svg.wires{pointer-events:none}.wire{pointer-events:stroke}
 .ain{display:flex;gap:6px}.ain input{flex:1;border:1px solid var(--line);border-radius:9px;padding:8px;font:inherit}
 .top .btn,.top .field{white-space:nowrap}.top{flex-wrap:nowrap;overflow-x:auto}
 @media (max-width:1500px){.top .field{font-size:0}.top .field select{font-size:13px}.brand small{display:none}}
+
+.serial-in{display:flex;gap:6px;align-items:center;padding:6px 8px;border-top:1px solid #2a2f3a}.serial-in input#serialIn{flex:1;min-width:0;background:#0f1218;color:#e5e7eb;border:1px solid #333a47;border-radius:6px;padding:4px 7px;font:12px ui-monospace,monospace}
+.serial-in label{font-size:11px;color:#9aa3b5;display:flex;gap:3px;align-items:center}
+.phone{border:1px solid var(--line,#ddd);border-radius:8px;padding:6px;margin:6px 0}.phone .plog{background:#0f172a;color:#a7f3d0;font:11px ui-monospace,monospace;min-height:40px;max-height:110px;overflow:auto;padding:5px;border-radius:5px;margin:4px 0;white-space:pre-wrap}

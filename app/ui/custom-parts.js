@@ -220,3 +220,29 @@ svgPart('cb-stepper', { w: 150, h: 128, props: ['angle', 'coils'],
       <rect x="6" y="66" width="74" height="54" rx="3" fill="#166534"/><rect x="22" y="72" width="34" height="16" rx="2" fill="#111"/>${txt(39, 83, 'ULN2003', 5.5)}
       ${coils.map((c, i) => `<circle cx="${16 + i * 16}" cy="98" r="4" fill="${c === '1' ? '#ef4444' : '#7f1d1d'}" ${c === '1' ? 'style="filter:drop-shadow(0 0 3px #ef4444)"' : ''}/>`).join('')}
       ${['IN1', 'IN2', 'IN3', 'IN4', '+', '−'].map((n, i) => leg(22 + i * 9.6, 112, 128) + txt(22 + i * 9.6, 110, n, 3.6, '#fff')).join('')}`; } });
+
+// TM1637 4-digit 7-segment module. attr segs = 4 bytes (bit0 = a … bit6 = g, bit7 = colon on digit 2), bright 0–7
+svgPart('cb-tm1637', { w: 124, h: 66, props: ['segs', 'bright'],
+  pins: ['CLK', 'DIO', 'VCC', 'GND'].map((name, i) => ({ name, x: 47 + i * 9.6, y: 66 })),
+  draw: el => { const s = (el.getAttribute('segs') || '0,0,0,0').split(',').map(Number), on = `rgba(255,40,40,${0.45 + 0.08 * +(el.getAttribute('bright') ?? 7)})`, off = '#3a0d0d';
+    const SEG = [[3, 0, 10, 2.2], [13, 2, 2.2, 10], [13, 14, 2.2, 10], [3, 24, 10, 2.2], [0.8, 14, 2.2, 10], [0.8, 2, 2.2, 10], [3, 12, 10, 2.2]];
+    return `<rect width="124" height="52" rx="3" fill="#1e3a8a"/><rect x="6" y="6" width="112" height="36" rx="2" fill="#111"/>
+      ${s.map((b, d) => `<g transform="translate(${13 + d * 26 + (d > 1 ? 4 : 0)},11)">${SEG.map(([x, y, w, h], k) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="1" fill="${(b >> k) & 1 ? on : off}"/>`).join('')}</g>`).join('')}
+      ${[16, 30].map(y => `<circle cx="64" cy="${y}" r="1.8" fill="${(s[1] >> 7) & 1 ? on : off}"/>`).join('')}
+      ${['CLK', 'DIO', 'VCC', 'GND'].map((n, i) => leg(47 + i * 9.6, 52, 66) + txt(47 + i * 9.6, 49, n, 3.6, '#fff')).join('')}`; } });
+
+// MAX7219 8×8 LED matrix module. attr rows = 8 bytes "r0,…,r7" (bit 7 = leftmost column)
+svgPart('cb-matrix', { w: 96, h: 112, props: ['rows'],
+  pins: ['VCC', 'GND', 'DIN', 'CS', 'CLK'].map((name, i) => ({ name, x: 28 + i * 9.6, y: 112 })),
+  draw: el => { const r = (el.getAttribute('rows') || '0,0,0,0,0,0,0,0').split(',').map(Number);
+    return `<rect width="96" height="98" rx="3" fill="#1d4ed8"/><rect x="6" y="4" width="84" height="84" rx="2" fill="#111"/>
+      ${r.flatMap((v, y) => Array.from({ length: 8 }, (_, x) => `<circle cx="${12 + x * 10.3}" cy="${10 + y * 10.3}" r="4" fill="${(v >> (7 - x)) & 1 ? '#ff3b3b' : '#3a0d0d'}"/>`)).join('')}
+      ${['VCC', 'GND', 'DIN', 'CS', 'CLK'].map((n, i) => leg(28 + i * 9.6, 98, 112) + txt(28 + i * 9.6, 95, n, 3.6, '#fff')).join('')}`; } });
+
+// Step-down transformer 230 V → 12-0-12 V (the mains side is built in)
+svgPart('cb-transformer', { w: 92, h: 84, props: ['vsec'],
+  pins: ['S1', 'CT', 'S2'].map((name, i) => ({ name, x: 30 + i * 16, y: 84 })),
+  draw: el => `<rect x="6" y="8" width="80" height="58" rx="3" fill="#4b5563"/><rect x="18" y="14" width="56" height="46" fill="#374151"/>
+    <rect x="28" y="16" width="36" height="42" rx="4" fill="#b45309"/>${txt(46, 34, '230 V', 6.5, '#fff')}${txt(46, 46, (el.getAttribute('vsec') || 12) + '-0-' + (el.getAttribute('vsec') || 12), 6.5, '#fff')}
+    <path d="M6 20 C-4 20 -4 4 8 2" fill="none" stroke="#111" stroke-width="3"/>${txt(10, 4, 'mains', 4.5, '#444')}
+    ${['S1', 'CT', 'S2'].map((n, i) => leg(30 + i * 16, 66, 84) + txt(30 + i * 16, 74, n, 4, '#111')).join('')}` });
